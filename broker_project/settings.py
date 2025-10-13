@@ -4,14 +4,16 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-import os
-
+# Secret key from environment (Render) or fallback for local
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key-for-local-dev')
 
-DEBUG = True
+DEBUG = True  # change to False after deployment
 
-# ✅ Render deployment: allow all hosts
-ALLOWED_HOSTS = ['*']  # later you can restrict to your Render URL
+# ✅ Allow all during dev; restrict later to your Render domain
+ALLOWED_HOSTS = ['*']
+
+# ✅ Required for Render CSRF safety
+CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com']
 
 # Applications
 INSTALLED_APPS = [
@@ -28,7 +30,7 @@ INSTALLED_APPS = [
 # Middleware
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # ✅ add whitenoise
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ✅ serves static files
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -56,14 +58,32 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "broker_project.wsgi.application"
 
-# ✅ Database (PostgreSQL on Render)
-DATABASES = {
-    "default": dj_database_url.config(
-        default="postgresql://broker_project_db_user:45uq32Mreg4gdBA1DBdIA23ZySBP6GMQ@dpg-d3mb5ol6ubrc73el8al0-a.oregon-postgres.render.com/broker_project_db",
-        conn_max_age=600,
-        ssl_require=True
-    )
-}
+# ✅ Database (PostgreSQL for both Local + Render)
+# ✅ Database configuration (Local + Render)
+if os.environ.get('DATABASE_URL'):
+    # Render / Production
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
+            conn_max_age=600,
+            ssl_require=True
+        )
+    }
+else:
+    # Local PostgreSQL
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": "broker_project_db",
+            "USER": "postgres",
+            "PASSWORD": "keshav1604",
+            "HOST": "localhost",
+            "PORT": "5432",
+            "OPTIONS": {
+                "sslmode": "disable"   # 👈 disable SSL locally
+            },
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -83,7 +103,7 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "brokerapp" / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"  # ✅ Render static files
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
