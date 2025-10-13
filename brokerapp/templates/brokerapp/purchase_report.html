@@ -1,0 +1,156 @@
+{% extends 'brokerapp/base.html' %}
+{% block title %}Purchase Report{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Purchase Report</h5>
+    <small class="text-light">Filter & View Purchase Summary</small>
+  </div>
+
+  <div class="card-body">
+
+    <!-- 🔍 FILTER BAR -->
+    <form method="get" class="row g-2 align-items-end sticky-top bg-white py-2 border-bottom mb-3" style="z-index:10;">
+      <div class="col-md-2 col-sm-6">
+        <label class="form-label">Start Date</label>
+        <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
+      </div>
+
+      <div class="col-md-2 col-sm-6">
+        <label class="form-label">End Date</label>
+        <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+      </div>
+
+      <div class="col-md-3 col-sm-6">
+        <label class="form-label">Broker</label>
+        <select name="broker" class="form-select form-select-sm">
+          <option value="all">All</option>
+          {% for b in brokers %}
+            <option value="{{ b.brokername }}" {% if selected_broker == b.brokername %}selected{% endif %}>
+              {{ b.brokername }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3 col-sm-6">
+        <label class="form-label">Report Type</label>
+        <select name="report_type" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="date" {% if report_type == "date" %}selected{% endif %}>Date Wise</option>
+          <option value="broker" {% if report_type == "broker" %}selected{% endif %}>Date + Broker Wise</option>
+        </select>
+      </div>
+
+      <div class="col-md-2 col-sm-6">
+        <button type="submit" class="btn btn-primary btn-sm w-100 mt-2">
+          <i class="fas fa-search"></i> Filter
+        </button>
+      </div>
+    </form>
+
+    <!-- 📊 REPORT TABLE -->
+    {% if report_data %}
+      {% for group in report_data %}
+        <div class="table-responsive mt-4">
+          <h6 class="bg-light p-2 border rounded">
+            <i class="fas fa-layer-group"></i> {{ group.group }}
+          </h6>
+
+          <table class="table table-sm table-bordered align-middle text-center">
+            <thead class="table-primary">
+              <tr>
+                <th>Invoice No</th>
+                <th>Invoice Date</th>
+                <th>Broker</th>
+                <th>Total Amt</th>
+                <th>Batav Amt</th>
+                <th>DR Amt</th>
+                <th>Other</th>
+                <th>Total</th>
+                <th>Advance</th>
+                <th>Net Amt</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for p in group.items %}
+              <tr>
+                <td>{{ p.invno }}</td>
+                <td>{{ p.invdate|date:"d-m-Y" }}</td>
+                <td>{{ p.broker.brokername }}</td>
+                <td>{{ p.totalamt|floatformat:2 }}</td>
+                <td>{{ p.batavamt|floatformat:2 }}</td>
+                <td>{{ p.dramt|floatformat:2 }}</td>
+                <td>{{ p.other|floatformat:2 }}</td>
+                <td>{{ p.total|floatformat:2 }}</td>
+                <td>{{ p.advance|floatformat:2 }}</td>
+                <td>{{ p.netamt|floatformat:2 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+
+            <!-- Group Totals -->
+            <tfoot class="table-secondary fw-bold">
+              <tr>
+                <td colspan="3" class="text-end">Group Totals:</td>
+                <td>{{ group.totals.total_totalamt|floatformat:2 }}</td>
+                <td>{{ group.totals.total_batavamt|floatformat:2 }}</td>
+                <td>{{ group.totals.total_dramt|floatformat:2 }}</td>
+                <td>{{ group.totals.total_other|floatformat:2 }}</td>
+                <td>{{ group.totals.total_total|floatformat:2 }}</td>
+                <td>{{ group.totals.total_advance|floatformat:2 }}</td>
+                <td>{{ group.totals.total_netamt|floatformat:2 }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-center text-muted mt-4">No purchases found for selected filters.</p>
+    {% endif %}
+
+    <!-- 🌐 OVERALL TOTALS -->
+    <div class="card mt-4 border-0 shadow-sm">
+      <div class="card-body bg-light">
+        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-sigma"></i> Overall Totals</h6>
+        <div class="row text-center">
+          <div class="col-md-2">Total Amt: <strong>{{ overall_totals.total_totalamt|floatformat:2 }}</strong></div>
+          <div class="col-md-2">Batav Amt: <strong>{{ overall_totals.total_batavamt|floatformat:2 }}</strong></div>
+          <div class="col-md-2">DR Amt: <strong>{{ overall_totals.total_dramt|floatformat:2 }}</strong></div>
+          <div class="col-md-2">Other: <strong>{{ overall_totals.total_other|floatformat:2 }}</strong></div>
+          <div class="col-md-2">Advance: <strong>{{ overall_totals.total_advance|floatformat:2 }}</strong></div>
+          <div class="col-md-2">Net Amt: <strong>{{ overall_totals.total_netamt|floatformat:2 }}</strong></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 📤 EXPORT OPTIONS -->
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <div>
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+        <i class="fas fa-print"></i> Print
+      </button>
+      <button class="btn btn-outline-success btn-sm" id="exportExcel">
+        <i class="fas fa-file-excel"></i> Export Excel
+      </button>
+    </div>
+    <small class="text-muted">Report generated on {{ now|date:"d M Y, h:i A" }}</small>
+  </div>
+</div>
+
+<!-- ✅ JS: Export Excel -->
+<script>
+document.getElementById("exportExcel").addEventListener("click", function () {
+  let table = document.querySelector("table");
+  if (!table) { alert("No data to export!"); return; }
+  let html = table.outerHTML.replace(/ /g, '%20');
+  let a = document.createElement('a');
+  a.href = 'data:application/vnd.ms-excel,' + html;
+  a.download = 'purchase_report.xls';
+  a.click();
+});
+</script>
+{% endblock %}

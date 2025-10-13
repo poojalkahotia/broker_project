@@ -1,0 +1,100 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Broker Project</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-custom shadow-sm">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'dashboard' %}">📊 Broker Dashboard</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNavDropdown">
+            <ul class="navbar-nav me-auto">
+
+                <!-- Master Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Master</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'party' %}">Party</a></li>
+                        <li><a class="dropdown-item" href="{% url 'broker' %}">Broker</a></li>
+                        <li><a class="dropdown-item" href="{% url 'item' %}">Item</a></li>
+                    </ul>
+                </li>
+
+                <!-- Entry Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Entry</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'sale_form_new' %}">Sale</a></li>
+                        <li><a class="dropdown-item" href="{% url 'purchase_form_new' %}">Purchase</a></li>
+                        
+                    </ul>
+                </li>
+
+                <!-- Report Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Report</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'daily_page' %}">Daily Page</a></li>
+                        <li><a class="dropdown-item" href="{% url 'sale_report' %}">Sale Report</a></li>
+                        <li><a class="dropdown-item" href="{% url 'purchase_report' %}">Purchase Report</a></li>
+
+                        <li><a class="dropdown-item" href="{% url 'bardana_report' %}">Bardana Report</a></li>
+
+                    </ul>
+                </li>
+
+                <!-- Account Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Account</a>
+                    
+                </li>
+
+            </ul>
+
+            <!-- Exit / Logout / Profile -->
+            {% if user.is_authenticated %}
+                <div class="d-flex align-items-center ms-auto">
+                    <span class="navbar-text me-3">
+                        Logged in as <strong>{{ user.username }}</strong>
+                    </span>
+                    <a href="{% url 'password_change' %}" class="btn btn-outline-warning me-2">Change Password</a>
+                    <form method="post" action="{% url 'logout' %}" class="mb-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger">Logout</button>
+                    </form>
+                </div>
+            {% else %}
+                <a href="{% url 'login' %}" class="btn btn-outline-primary ms-auto">Login</a>
+            {% endif %}
+
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    <!-- Global Flash Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% block content %}
+    {% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

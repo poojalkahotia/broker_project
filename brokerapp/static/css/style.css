@@ -1,0 +1,62 @@
+/* Navbar styling (unchanged) */
+.navbar-custom {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.navbar-custom .nav-link,
+.navbar-custom .navbar-brand {
+    color: #343a40;
+    font-weight: 500;
+}
+
+.navbar-custom .nav-link:hover {
+    color: #0d6efd;
+}
+
+/* Login page specific styling */
+body.login-page .login-card {
+  padding: 2rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  background-color: #ffffff;
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box;
+}
+
+/* Prevent labels from wrapping */
+.nowrap-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Make sure flex items don't shrink weirdly */
+.d-flex.align-items-center label {
+  flex-shrink: 0;
+}
+
+/* Compact and neat form look */
+.form-label {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
+.form-control-sm {
+  height: 32px;
+  font-size: 14px;
+  padding: 4px 8px;
+}
+
+/* Balance input width */
+.d-flex .form-control-sm {
+  max-width: 200px;
+}
+
+/* Small vertical space between rows */
+.d-flex {
+  margin-bottom: 6px;
+}
+
