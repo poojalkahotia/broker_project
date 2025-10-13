@@ -1,11 +1,14 @@
 import os
 from pathlib import Path
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'your-very-secret-key'
 DEBUG = True
-ALLOWED_HOSTS = []
+
+# ✅ Render deployment: allow all hosts
+ALLOWED_HOSTS = ['*']  # later you can restrict to your Render URL
 
 # Applications
 INSTALLED_APPS = [
@@ -22,6 +25,7 @@ INSTALLED_APPS = [
 # Middleware
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ✅ add whitenoise
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -49,16 +53,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "broker_project.wsgi.application"
 
-# Database (PostgreSQL)
+# ✅ Database (PostgreSQL on Render)
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "broker_project",
-        "USER": "broker_user",
-        "PASSWORD": "Golu123",
-        "HOST": "localhost",
-        "PORT": "5432",
-    }
+    "default": dj_database_url.config(
+        default="postgresql://broker_project_db_user:45uq32Mreg4gdBA1DBdIA23ZySBP6GMQ@dpg-d3mb5ol6ubrc73el8al0-a.oregon-postgres.render.com/broker_project_db",
+        conn_max_age=600,
+        ssl_require=True
+    )
 }
 
 # Password validation
@@ -79,6 +80,7 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "brokerapp" / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"  # ✅ Render static files
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
