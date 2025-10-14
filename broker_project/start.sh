@@ -3,7 +3,7 @@ set -o errexit
 set -o pipefail
 
 echo "🔄 Checking database connection..."
-python manage.py migrate --check || echo "DB not ready yet."
+python manage.py migrate --check || echo "Database not initialized yet."
 
 echo "⌛ Waiting for database..."
 sleep 5
@@ -21,7 +21,7 @@ try:
     else:
         print("ℹ️ Admin already exists")
 except Exception as e:
-    print("⚠️ Admin creation skipped:", e)
+    print("⚠️ Admin creation failed:", e)
 PY
 
 echo "🚀 Starting Gunicorn server..."
