@@ -11,6 +11,7 @@ packaging==25.0
 pillow==11.3.0
 psycopg==3.2.10
 psycopg-binary==3.2.10
+psycopg2-binary==2.9.11
 python-dotenv==1.1.1
 reportlab==4.4.4
 sqlparse==0.5.3
