@@ -1,1 +1,1 @@
-web: gunicorn broker_project.broker_project.wsgi:application
+web: python manage.py migrate --noinput && gunicorn broker_project.wsgi
