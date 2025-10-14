@@ -2,8 +2,11 @@
 set -o errexit
 set -o pipefail
 
-echo "⌛ Waiting for database to be ready..."
-python manage.py showmigrations > /dev/null 2>&1 || sleep 5
+echo "🔄 Checking database connection..."
+python manage.py migrate --check || echo "DB not ready yet."
+
+echo "⌛ Waiting for database..."
+sleep 5
 
 echo "📦 Running Django migrations..."
 python manage.py migrate --noinput
@@ -16,9 +19,9 @@ try:
         User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
         print("✅ Created admin (admin / admin123)")
     else:
-        print("ℹ️ Admin user already exists")
+        print("ℹ️ Admin already exists")
 except Exception as e:
-    print("⚠️ Superuser creation failed:", e)
+    print("⚠️ Admin creation skipped:", e)
 PY
 
 echo "🚀 Starting Gunicorn server..."
