@@ -1,1 +1,1 @@
-web: python manage.py migrate --noinput && gunicorn broker_project.wsgi
+web: bash ./broker_project/start.sh
