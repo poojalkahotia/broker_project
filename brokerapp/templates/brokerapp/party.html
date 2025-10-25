@@ -11,15 +11,20 @@
                 {% if editing %} ✏️ Edit Party {% else %} ➕ Add Party {% endif %}
             </h3>
 
-            
-
             <form method="post" novalidate>
                 {% csrf_token %}
 
+                <!-- ✅ Party Name with validation message -->
                 <div class="mb-2 d-flex align-items-center">
                     <label for="id_partyname" class="form-label me-2" style="width: 100px;">Party Name:</label>
                     {{ form.partyname|add_class:"form-control form-control-sm w-75" }}
                 </div>
+                {% if form.partyname.errors %}
+                  <div class="text-danger small mt-1 ms-5">
+                    {{ form.partyname.errors|striptags }}
+                  </div>
+                {% endif %}
+                <!-- ✅ end -->
 
                 <div class="mb-2 d-flex align-items-center">
                     <label for="id_add1" class="form-label me-2" style="width: 100px;">Address 1:</label>
@@ -55,6 +60,7 @@
                     <label for="id_email" class="form-label me-2" style="width: 100px;">Email:</label>
                     {{ form.email|add_class:"form-control form-control-sm w-75" }}
                 </div>
+
                 <div class="mb-2 d-flex align-items-center">
                     <label for="id_openingdebit" class="form-label me-2" style="width: 100px;">Opening Dr:</label>
                     {{ form.openingdebit|add_class:"form-control form-control-sm w-75" }}
@@ -90,7 +96,6 @@
                         <th>Party Name</th>
                         <th>City</th>
                         <th>Mobile</th>
-                        
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -100,14 +105,12 @@
                             <td>{{ party.partyname }}</td>
                             <td>{{ party.city }}</td>
                             <td>{{ party.mobile }}</td>
-                            
                             <td class="text-center">
                                 <div class="action-btns">
                                     <a href="{% url 'party_edit' party.partyname %}" class="btn btn-sm btn-warning action-btn-edit" aria-label="Edit">Edit</a>
                                     <a href="{% url 'party_delete' party.partyname %}" class="btn btn-sm btn-danger action-btn-delete" aria-label="Delete" onclick="return confirm('Are you sure?')">Delete</a>
                                 </div>
                             </td>
-
                         </tr>
                     {% empty %}
                         <tr><td colspan="5" class="text-center">No parties found.</td></tr>

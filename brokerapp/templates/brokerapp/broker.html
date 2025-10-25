@@ -13,10 +13,16 @@
             <form method="post" novalidate>
                 {% csrf_token %}
 
-                <div class="mb-2 d-flex align-items-center">
-                    <label for="id_brokername" class="form-label me-2" style="width: 100px;">Broker Name:</label>
-                    {{ form.brokername|add_class:"form-control form-control-sm w-75" }}
+                <div class="mb-2 d-flex flex-column">
+                    <div class="d-flex align-items-center">
+                        <label for="id_brokername" class="form-label me-2" style="width: 100px;">Broker Name:</label>
+                        {{ form.brokername|add_class:"form-control form-control-sm w-75" }}
+                    </div>
+                    {% if form.brokername.errors %}
+                        <small class="text-danger mt-1">{{ form.brokername.errors.0 }}</small>
+                    {% endif %}
                 </div>
+
 
                 <div class="mb-2 d-flex align-items-center">
                     <label for="id_mobileno" class="form-label me-2" style="width: 100px;">Mobile:</label>

@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.db.models import Sum, F, FloatField, ExpressionWrapper
 from django.utils.dateparse import parse_date
 from django.http import HttpResponse
-
+from django.db.models import ProtectedError
 from io import BytesIO
 from fpdf import FPDF
 
@@ -901,9 +901,17 @@ def party_view(request, pk=None):
 
 
 def party_delete(request, pk):
+    """Safely delete a Party — show message if linked to transactions."""
     party = get_object_or_404(HeadParty, pk=pk)
-    party.delete()
-    messages.success(request, "Party deleted successfully!")
+    party_name = party.partyname  # ✅ Save name before deleting
+    try:
+        party.delete()
+        messages.success(request, f"✅ Party '{party_name}' deleted successfully!")
+    except ProtectedError:
+        messages.error(
+            request,
+            f"⚠️ Cannot delete '{party_name}' — it is linked to existing Jama or other entries."
+        )
     return redirect('party')
 
 def broker_view(request, pk=None):
@@ -934,10 +942,21 @@ def broker_view(request, pk=None):
 
 # Delete Broker
 def broker_delete(request, pk):
+    """Safely delete a Broker — show warning if linked to transactions."""
     broker = get_object_or_404(Broker, pk=pk)
-    broker.delete()
-    messages.success(request, "Broker deleted successfully!")
+    broker_name = broker.brokername  # ✅ store name before delete
+
+    try:
+        broker.delete()
+        messages.success(request, f"✅ Broker '{broker_name}' deleted successfully!")
+    except ProtectedError:
+        messages.error(
+            request,
+            f"⚠️ Cannot delete '{broker_name}' — it is linked to existing Jama or Naame entries."
+        )
+
     return redirect('broker')
+
 
 @login_required
 def dashboard(request):
@@ -950,24 +969,50 @@ def item_view(request):
 
     if request.method == 'POST':
         action = request.POST.get('action')
-        item_name = request.POST.get('item_name')
+        item_name = request.POST.get('item_name', '').strip()
+        item_pk = request.POST.get('item_pk', '').strip()  # string PK for your model
 
-        if item_name:
+        # Load instance only if explicit pk provided (user clicked row)
+        if item_pk:
             try:
-                selected_item = HeadItem.objects.get(item_name=item_name)
+                selected_item = HeadItem.objects.get(pk=item_pk)
             except HeadItem.DoesNotExist:
                 selected_item = None
+        else:
+            selected_item = None
 
         if action == 'save':
             form = ItemForm(request.POST, instance=selected_item)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Item saved successfully!")
-                return redirect('item')
 
-        elif action == 'delete' and selected_item:
-            selected_item.delete()
-            messages.success(request, "Item deleted successfully!")
+            if form.is_valid():
+                dup_qs = HeadItem.objects.filter(item_name__iexact=form.cleaned_data['item_name'])
+                if selected_item:
+                    dup_qs = dup_qs.exclude(pk=selected_item.pk)
+
+                if dup_qs.exists():
+                    form.add_error('item_name', "⚠️ This item already exists.")
+                else:
+                    form.save()
+                    messages.success(request, "✅ Item saved successfully!")
+                    return redirect('item')
+            else:
+                messages.error(request, "⚠️ Please correct the errors below.")
+
+        elif action == 'delete':
+            # Delete only if selected_item provided (explicit selection)
+            if item_pk and selected_item:
+                item_name_for_msg = selected_item.item_name
+                try:
+                    selected_item.delete()
+                    messages.success(request, f"🗑️ Item '{item_name_for_msg}' deleted successfully!")
+                except ProtectedError:
+                    # Related protected records exist (sale/purchase etc.)
+                    messages.error(
+                        request,
+                        f"⚠️ Cannot delete '{item_name_for_msg}' — it is linked to existing sales/purchases."
+                    )
+            else:
+                messages.warning(request, "⚠️ Select an item (click the table row) before trying to delete.")
             return redirect('item')
 
     return render(request, 'brokerapp/item.html', {
@@ -976,44 +1021,115 @@ def item_view(request):
     })
 
 
+
+
+
 @require_GET
 def daily_page_view(request):
-    today = timezone.localdate().strftime("%Y-%m-%d")
+    """
+    Show daily page for selected date (via ?date=YYYY-MM-DD).
+    If no date provided, default to today.
+    """
+    date_str = request.GET.get('date', '').strip()
+    if date_str:
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            selected_date = timezone.localdate()
+    else:
+        selected_date = timezone.localdate()
 
     parties = HeadParty.objects.all().order_by('partyname')
-    brokers = Broker.objects.all().order_by('brokername')  #
-    # get today's page or None
-    daily_page = DailyPage.objects.filter(date=today).first()
-    jama_entries = daily_page.jama_entries.all() if daily_page else []
-    naame_entries = daily_page.naame_entries.all() if daily_page else []
+    brokers = Broker.objects.all().order_by('brokername')
+
+    # fetch DailyPage for the selected date
+    daily_page = DailyPage.objects.filter(date=selected_date).first()
+
+    # Safely serialize related entries for display
+    def serialize_entry(e):
+        broker_name = getattr(e.broker, 'brokername', '') if getattr(e, 'broker', None) else ''
+        party_name = getattr(e.party, 'partyname', '') if getattr(e, 'party', None) else ''
+        return {
+            'entry_no': e.entry_no,
+            'party_name': party_name,
+            'broker_name': broker_name,
+            'amount': e.amount,
+            'remark': e.remark,
+        }
+
+    jama_entries = []
+    naame_entries = []
+
+    if daily_page:
+        jama_entries = [serialize_entry(j) for j in daily_page.jama_entries.all()]
+        naame_entries = [serialize_entry(n) for n in daily_page.naame_entries.all()]
+
+    # Show "No entry on that day" message if no data
+    no_entries = not (jama_entries or naame_entries)
+
     context = {
-        'today': today,
+        'selected_date': selected_date,
         'parties': parties,
-        'brokers': brokers, 
+        'brokers': brokers,
         'jama_entries': jama_entries,
         'naame_entries': naame_entries,
+        'no_entries': no_entries,
     }
     return render(request, 'brokerapp/daily_page.html', context)
 
 @require_GET
 def daily_page_show(request):
-    # expects ?date=YYYY-MM-DD
-    d = request.GET.get('date')
+    """
+    JSON endpoint: ?date=YYYY-MM-DD (optional; if missing -> today)
+    Response: { "date": "...", "jama": [...], "naame": [...] }
+    Each entry contains: entry_no, party_name, broker_name, amount, remark, created_at
+    """
+    d = request.GET.get('date', '').strip()
+
+    # default to today if missing
     if not d:
-        return JsonResponse({'error': 'date is required'}, status=400)
-    try:
-        date_obj = timezone.datetime.strptime(d, '%Y-%m-%d').date()
-    except Exception:
-        return JsonResponse({'error': 'invalid date format'}, status=400)
+        date_obj = timezone.localdate()
+    else:
+        try:
+            date_obj = datetime.strptime(d, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'error': 'invalid date format, expected YYYY-MM-DD'}, status=400)
 
     daily_page = DailyPage.objects.filter(date=date_obj).first()
+
+    def serialize_entry(entry):
+        broker_name = getattr(entry.broker, 'brokername', '') if getattr(entry, 'broker', None) else ''
+        party_name = getattr(entry.party, 'partyname', '') if getattr(entry, 'party', None) else ''
+        return {
+            'entry_no': entry.entry_no,
+            'party_name': party_name,
+            'broker_name': broker_name,
+            'amount': float(entry.amount or 0),
+            'remark': entry.remark or '',
+            'created_at': entry.created_at.isoformat() if entry.created_at else None,
+        }
+
     jama = []
     naame = []
-    if daily_page:
-        jama = list(daily_page.jama_entries.values('entry_no','party__partyname','party','amount','remark','created_at'))
-        naame = list(daily_page.naame_entries.values('entry_no','party__partyname','party','amount','remark','created_at'))
 
-    return JsonResponse({'date': d, 'jama': jama, 'naame': naame})
+    if daily_page:
+        jama = [serialize_entry(j) for j in daily_page.jama_entries.all()]
+        naame = [serialize_entry(n) for n in daily_page.naame_entries.all()]
+
+    # If no data for selected date
+    if not jama and not naame:
+        return JsonResponse({
+            'date': date_obj.strftime('%Y-%m-%d'),
+            'message': 'No entry on that day',
+            'jama': [],
+            'naame': [],
+        })
+
+    return JsonResponse({
+        'date': date_obj.strftime('%Y-%m-%d'),
+        'jama': jama,
+        'naame': naame,
+    })
 
 @require_POST
 def daily_page_jama_add(request):

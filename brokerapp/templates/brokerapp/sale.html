@@ -362,20 +362,32 @@ function computeQtyAndAmountAndUpdateUI(){
     const millwt = getFloat('millwt');
     const rate = getFloat('rate');
 
-    // ✅ Difference Weight
+    // Difference Weight (party - mill)
     const diff = partywt - millwt;
     setVal('diffwt', diff);
 
-    // ✅ Qty calculation (usually totalBora)
-    let qty = totalBora;
+    // Qty calculation:
+    //  - prefer totalBora when provided from BN/BO inputs
+    //  - fallback to difference weight (partywt - millwt) if totalBora == 0
+    let qty = Number(totalBora) || 0;
+    if (!qty) {
+        // If totalBora is zero but party/mill weights are present, use their difference
+        const diffForQty = Math.max(0, diff);
+        qty = diffForQty;
+    }
     setVal('qty', qty);
 
-    // ✅ Amount calculation (with 0.01 factor as per project)
-    const amount = qty * rate * 0.01;
+    // Amount calculation: keep existing 0.01 factor (project-specific).
+    // Only compute when there is a positive qty and a rate (prevents NaN)
+    let amount = 0;
+    if (qty > 0 && rate !== 0) {
+        amount = qty * rate * 0.01;
+    }
     setVal('lineAmount', amount);
 
     return { qty, amount };
 }
+
 
 /* ===== Update Summary ===== */
 function updateSummary(){
@@ -437,11 +449,21 @@ function updateUI() {
 
 /* ===== Reset Form Fields ===== */
 function resetAddFormFields(){
-    ['itemSelect','bora','bn','bnwt','bo','bowt','qty','rate','lineAmount','partywt','millwt','diffwt','lotno'].forEach(id=>setVal(id,''));
+    // Clear select and text inputs explicitly
+    const sel = document.getElementById('itemSelect');
+    if (sel) sel.value = '';
+    document.getElementById('lotno').value = '';
+
+    // Reset numeric inputs using setVal (formats to 2 decimals)
+    ['bora','bn','bnwt','bo','bowt','qty','rate','lineAmount','partywt','millwt','diffwt'].forEach(id=>{
+        setVal(id, 0);
+    });
+
     editingIndex = null;
-    const btn = document.getElementById('addItemBtn'); 
-    if(btn){ btn.textContent='Add'; btn.classList.replace('btn-primary','btn-success'); }
-}
+    const btn = document.getElementById('addItemBtn');
+    if(btn){ btn.textContent='Add'; btn.classList.remove('btn-primary'); btn.classList.add('btn-success'); }
+ }
+
 
 /* ===== Add / Update Item ===== */
 document.getElementById('addItemBtn').addEventListener('click', function(){
@@ -528,12 +550,13 @@ document.addEventListener('DOMContentLoaded', function(){
                 e.preventDefault();
                 this.value = 0.58;
                 computeQtyAndAmountAndUpdateUI();
-                document.getElementById('bo').focus();
+                const nextEl = document.getElementById('bo');
+                if(nextEl) nextEl.focus();
             }
         });
     }
 
-    // Move focus on Enter
+    // Move focus on Enter for compact item entry order
     const order = ['bnwt','bo','bowt','partywt','millwt','rate'];
     order.forEach((id, idx)=>{
         const el = document.getElementById(id);
@@ -542,13 +565,46 @@ document.addEventListener('DOMContentLoaded', function(){
                 if(e.key === 'Enter'){
                     e.preventDefault();
                     const next = order[idx+1];
-                    if(next) document.getElementById(next).focus();
+                    if(next){
+                        const nextEl = document.getElementById(next);
+                        if(nextEl) nextEl.focus();
+                    }
                     computeQtyAndAmountAndUpdateUI();
                 }
             });
         }
     });
+
+    // === Live summary updates ===
+    // When user types into these summary fields, recalc amounts and net immediately.
+    // Using 'input' so it reacts to typing, paste and spinner changes.
+    ['batavpercent','dr','qi','other','advance'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el){
+            el.addEventListener('input', function(){
+                // ensure totals reflect latest changes from summary fields
+                updateSummary();
+            });
+        }
+    });
+
+    // Also update summary when numeric fields that affect line amount change
+    // (in case user types directly into party/mill/rate without leaving field)
+    ['partywt','millwt','rate','bn','bnwt','bo','bowt'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el){
+            el.addEventListener('input', function(){
+                computeQtyAndAmountAndUpdateUI();
+                // if user changed a line-affecting field while editing (but before Add),
+                // update visible summary amounts to reflect current line amount when appropriate.
+                // We only update summary here if itemsArray already has rows (so totals are meaningful).
+                if(itemsArray.length) updateSummary();
+            });
+        }
+    });
+
 });
+
 </script>
 
 

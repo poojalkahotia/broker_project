@@ -1,13 +1,13 @@
 from django import forms
 from .models import HeadParty, Broker, HeadItem, SaleMaster, SaleDetails, PurchaseMaster, PurchaseDetails
-
+from django.core.exceptions import ValidationError
 
 class PartyForm(forms.ModelForm):
     class Meta:
         model = HeadParty
         fields = '__all__'
         widgets = {
-            'partyname': forms.TextInput(attrs={'class': 'form-control',}),
+            'partyname': forms.TextInput(attrs={'class': 'form-control'}),
             'add1': forms.TextInput(attrs={'class': 'form-control'}),
             'add2': forms.TextInput(attrs={'class': 'form-control'}),
             'city': forms.TextInput(attrs={'class': 'form-control'}),
@@ -18,7 +18,6 @@ class PartyForm(forms.ModelForm):
             'remark': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'openingdebit': forms.NumberInput(attrs={'class': 'form-control'}),
             'openingcredit': forms.NumberInput(attrs={'class': 'form-control'}),
-
         }
 
     def __init__(self, *args, **kwargs):
@@ -26,9 +25,24 @@ class PartyForm(forms.ModelForm):
         for field in self.fields:
             self.fields[field].label = field.capitalize()
 
-      # 👇 Disable 'partyname' if it's edit mode (instance exists)
+        # 👇 Disable 'partyname' if it's edit mode (instance exists)
         if self.instance and self.instance.pk:
-            self.fields['partyname'].disabled = True
+            self.fields['partyname'].widget.attrs['readonly'] = True
+
+
+    # ✅ Duplicate name validation
+    def clean_partyname(self):
+        name = self.cleaned_data.get('partyname')
+        if not name:
+            return name
+
+        qs = HeadParty.objects.filter(partyname__iexact=name)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise ValidationError("⚠️ This party already exists.")
+        return name
 
 class BrokerForm(forms.ModelForm):
     class Meta:
@@ -48,9 +62,17 @@ class BrokerForm(forms.ModelForm):
         for field in self.fields:
             self.fields[field].label = field.capitalize()
 
-        # 👇 Disable 'brokername' if it's edit mode
+        # Disable brokername when editing
         if self.instance and self.instance.pk:
             self.fields['brokername'].disabled = True
+
+    # ✅ Validation for duplicate broker name
+    def clean_brokername(self):
+        brokername = self.cleaned_data.get('brokername')
+        if not self.instance.pk:  # Only when adding new broker
+            if Broker.objects.filter(brokername__iexact=brokername).exists():
+                raise ValidationError("⚠️ This broker already exists.")
+        return brokername
 
 class ItemForm(forms.ModelForm):
     class Meta:
@@ -59,8 +81,24 @@ class ItemForm(forms.ModelForm):
         widgets = {
             'item_name': forms.TextInput(attrs={'class': 'form-control'}),
         }
-        
-        
+
+    def clean_item_name(self):
+        name = self.cleaned_data.get('item_name')
+
+        # Skip if empty
+        if not name:
+            return name
+
+        # If adding new item, check duplicates
+        if not self.instance.pk and HeadItem.objects.filter(item_name__iexact=name).exists():
+            raise ValidationError("⚠️ This item already exists.")
+
+        # If editing, check for duplicates excluding itself
+        if self.instance.pk and HeadItem.objects.filter(item_name__iexact=name).exclude(pk=self.instance.pk).exists():
+            raise ValidationError("⚠️ This item already exists.")
+
+        return name
+
 
 
 # --------------------- SALE MASTER FORM ---------------------
