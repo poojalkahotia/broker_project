@@ -106,3 +106,19 @@ body.login-page .login-card {
     font-size: .78rem !important;
   }
 }
+/* 🔧 Strong mobile fix for Edit/Delete buttons */
+@media (max-width: 768px) {
+  td .action-btns {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
+    white-space: nowrap !important;
+  }
+
+  td .action-btns .btn {
+    display: inline-flex !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+}
