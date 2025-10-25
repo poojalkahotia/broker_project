@@ -59,32 +59,50 @@ body.login-page .login-card {
 .d-flex {
   margin-bottom: 6px;
 }
-
-/* ========================================= */
-/* ✅ MOBILE FIX: Keep Edit/Delete inline only on mobile */
-/* ========================================= */
+/* >>> STRONG OVERRIDES: force Edit/Delete inline on small screens (mobile) */
 @media (max-width: 768px) {
-  td .btn {
-    display: inline-flex !important;
-    margin-right: 4px;
-    white-space: nowrap;
-  }
-
-  .action-btns {
+  /* wrapper - make it inline flex and never wrap */
+  td .action-btns,
+  .action-btns,
+  td .action-btns > div.action-btns-inner {
     display: inline-flex !important;
     flex-direction: row !important;
-    align-items: center;
-    gap: 4px;
-    white-space: nowrap;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
   }
 
+  /* ensure the buttons themselves do not become full-width */
+  td .action-btns > .btn,
+  .action-btns > .btn {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 36px !important;
+    padding: .22rem .5rem !important;
+    font-size: .85rem !important;
+  }
+
+  /* defensive: undo any .w-100 or .d-block on buttons */
+  td .action-btns .w-100,
+  td .action-btns .d-block,
+  .action-btns .w-100,
+  .action-btns .d-block {
+    display: inline-flex !important;
+  }
+
+  /* vertical alignment */
   .table td {
-    vertical-align: middle;
+    vertical-align: middle !important;
   }
+}
 
-  /* optional: slightly smaller button padding on tiny screens */
-  .btn-sm {
-    padding: 4px 6px;
-    font-size: 13px;
+/* tiny screens - slightly smaller buttons */
+@media (max-width: 420px) {
+  .action-btns > .btn {
+    padding: .18rem .36rem !important;
+    font-size: .78rem !important;
   }
 }

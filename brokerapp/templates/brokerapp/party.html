@@ -101,10 +101,13 @@
                             <td>{{ party.city }}</td>
                             <td>{{ party.mobile }}</td>
                             
-                            <td class="action-btns">
-                                <a href="{% url 'party_edit' party.partyname %}" class="btn btn-sm btn-warning">Edit</a>
-                                <a href="{% url 'party_delete' party.partyname %}" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">Delete</a>
+                            <td class="text-center">
+                                <div class="action-btns">
+                                    <a href="{% url 'party_edit' party.partyname %}" class="btn btn-sm btn-warning action-btn-edit" aria-label="Edit">Edit</a>
+                                    <a href="{% url 'party_delete' party.partyname %}" class="btn btn-sm btn-danger action-btn-delete" aria-label="Delete" onclick="return confirm('Are you sure?')">Delete</a>
+                                </div>
                             </td>
+
                         </tr>
                     {% empty %}
                         <tr><td colspan="5" class="text-center">No parties found.</td></tr>
