@@ -110,25 +110,26 @@
       <p class="text-center text-muted mt-4">No sales found for selected filters.</p>
     {% endif %}
 
-    <!-- 🌐 OVERALL TOTALS -->
-    <div class="card mt-4 border-0 shadow-sm">
-      <div class="card-body bg-light">
-        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-sigma"></i> Overall Totals</h6>
-        <div class="row text-center">
-          <div class="col-md-2">Total Amt: <strong>{{ overall_totals.total_totalamt|floatformat:2 }}</strong></div>
-          <div class="col-md-2">Batav Amt: <strong>{{ overall_totals.total_batavamt|floatformat:2 }}</strong></div>
-          <div class="col-md-2">DR Amt: <strong>{{ overall_totals.total_dramt|floatformat:2 }}</strong></div>
-          <div class="col-md-2">Other: <strong>{{ overall_totals.total_other|floatformat:2 }}</strong></div>
-          <div class="col-md-2">Advance: <strong>{{ overall_totals.total_advance|floatformat:2 }}</strong></div>
-          <div class="col-md-2">Net Amt: <strong>{{ overall_totals.total_netamt|floatformat:2 }}</strong></div>
-        </div>
+    <!-- 🌐 OVERALL TOTALS (vertical stacked layout) -->
+  <div class="card mt-4 border-0 shadow-sm">
+    <div class="card-body bg-light overall-totals-vertical">
+      <h6 class="fw-bold text-primary mb-3">
+        <i class="fas fa-sigma"></i> Overall Totals
+      </h6>
+      <div class="totals-box">
+        <div class="total-line"><span>Total Amt:</span> <strong>{{ overall_totals.total_totalamt|floatformat:2 }}</strong></div>
+        <div class="total-line"><span>Batav Amt:</span> <strong>{{ overall_totals.total_batavamt|floatformat:2 }}</strong></div>
+        <div class="total-line"><span>DR Amt:</span> <strong>{{ overall_totals.total_dramt|floatformat:2 }}</strong></div>
+        <div class="total-line"><span>Other:</span> <strong>{{ overall_totals.total_other|floatformat:2 }}</strong></div>
+        <div class="total-line"><span>Advance:</span> <strong>{{ overall_totals.total_advance|floatformat:2 }}</strong></div>
+        <div class="total-line border-top pt-2 mt-2"><span>Net Amt:</span> <strong>{{ overall_totals.total_netamt|floatformat:2 }}</strong></div>
       </div>
     </div>
-
   </div>
 
-  <!-- 📤 EXPORT OPTIONS -->
-  <div class="card-footer d-flex justify-content-between align-items-center">
+
+    <!-- 📤 EXPORT OPTIONS -->
+  <div class="card-footer d-flex justify-content-between align-items-center d-print-none">
     <div>
       <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
         <i class="fas fa-print"></i> Print
@@ -139,7 +140,8 @@
     </div>
     <small class="text-muted">Report generated on {{ now|date:"d M Y, h:i A" }}</small>
   </div>
-</div>
+  </div>
+
 
 <!-- ✅ JS: Export Excel -->
 <script>

@@ -1,9 +1,7 @@
-
-
 {% extends 'brokerapp/base.html' %}
 {% load static %}
 {% block content %}
-<div class="container-fluid p-1 vh-100 d-flex flex-column" style="max-width:98vw;">
+<div class="container-fluid p-1 d-flex flex-column" style="max-width:98vw;">
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-2">
     <h6 class="mb-0">Daily Page</h6>
@@ -24,10 +22,10 @@
   {% endif %}
 
   <!-- Main Row -->
-  <div class="row flex-grow-1 g-2" style="overflow:hidden;">
+  <div class="row g-2">
     <!-- Jama Column -->
     <div class="col-lg-6 d-flex flex-column h-100">
-      <div class="card shadow-sm flex-grow-1 d-flex flex-column">
+      <div class="card shadow-sm d-flex flex-column">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Jama</h5>
           <div><small class="text-muted">Total: <span id="jama_total">0.00</span></small></div>
@@ -58,40 +56,57 @@
 
             <div class="col-md-2">
               <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="jama_amount" class="form-control" step="0.01">
+              <input type="number" name="amount" id="jama_amount" class="form-control text-end" step="0.01" style="max-width:140px; width:100%;">
             </div>
 
-            <!-- Remark + Add -->
-            <div class="col-md-4 d-flex align-items-end">
-              <div class="flex-grow-1 me-2">
-                <label class="form-label">Remark</label>
-                <input type="text" name="remark" id="jama_remark" class="form-control">
-              </div>
-              <button type="button" id="jama_add_btn" class="btn btn-success px-4 py-2" style="white-space: nowrap;">Add</button>
+            <div class="col-md-3" style="min-width:0;">
+              <label class="form-label">Remark</label>
+              <input type="text" name="remark" id="jama_remark" class="form-control" style="min-width:0;">
+            </div>
+
+            <div class="col-md-1 d-grid">
+              <!-- Use d-grid to vertically align button -->
+              <label class="form-label invisible">Add</label>
+              <button type="button" id="jama_add_btn" class="btn btn-success">Add</button>
             </div>
           </form>
+
 
           <!-- Table -->
           <div class="table-responsive flex-grow-1" style="overflow-y:auto;">
             <table class="table table-sm table-striped mb-0" id="jama_table">
               <thead class="table-dark">
                 <tr>
-                  <th>EntryNo</th>
+                  <th style="width:70px">EntryNo</th>
                   <th>Party</th>
                   <th>Broker</th>
-                  <th>Amount</th>
-                  <th>Remark</th>
-                  <th>Action</th>
+                  <th style="width:110px" class="text-end">Amount</th>
+                  <th style="width:240px">Remark</th>
+                  <th style="width:110px">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {% for j in jama_entries %}
                   <tr data-entry="{{ j.entry_no }}">
                     <td>{{ j.entry_no }}</td>
-                    <td>{{ j.party.partyname }}</td>
-                    <td>{% if j.broker %}{{ j.broker.brokername|default:j.broker.name }}{% endif %}</td>
+                    <td>
+                      {# If j.party is a related object use its partyname, otherwise fall back to party_name string #}
+                      {% if j.party %}
+                        {% if j.party.partyname %}{{ j.party.partyname }}{% else %}{{ j.party }}{% endif %}
+                      {% else %}
+                        {{ j.party_name|default:'' }}
+                      {% endif %}
+                    </td>
+                    <td>
+                      {# If j.broker is an object use brokername (or name), else broker_name string #}
+                      {% if j.broker %}
+                        {% if j.broker.brokername %}{{ j.broker.brokername }}{% elif j.broker.name %}{{ j.broker.name }}{% else %}{{ j.broker }}{% endif %}
+                      {% else %}
+                        {{ j.broker_name|default:'' }}
+                      {% endif %}
+                    </td>
                     <td class="text-end">{{ j.amount }}</td>
-                    <td>{{ j.remark }}</td>
+                    <td>{{ j.remark|default:'' }}</td>
                     <td>
                       <button class="btn btn-sm btn-danger jama-remove-btn" data-entry="{{ j.entry_no }}">Remove</button>
                     </td>
@@ -137,16 +152,17 @@
 
             <div class="col-md-2">
               <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="naame_amount" class="form-control" step="0.01">
+              <input type="number" name="amount" id="naame_amount" class="form-control text-end" step="0.01" style="max-width:140px; width:100%;">
             </div>
 
-            <!-- Remark + Add -->
-            <div class="col-md-4 d-flex align-items-end">
-              <div class="flex-grow-1 me-2">
-                <label class="form-label">Remark</label>
-                <input type="text" name="remark" id="naame_remark" class="form-control">
-              </div>
-              <button type="button" id="naame_add_btn" class="btn btn-success px-4 py-2" style="white-space: nowrap;">Add</button>
+            <div class="col-md-3" style="min-width:0;">
+              <label class="form-label">Remark</label>
+              <input type="text" name="remark" id="naame_remark" class="form-control" style="min-width:0;">
+            </div>
+
+            <div class="col-md-1 d-grid">
+              <label class="form-label invisible">Add</label>
+              <button type="button" id="naame_add_btn" class="btn btn-success">Add</button>
             </div>
           </form>
 
@@ -155,22 +171,34 @@
             <table class="table table-sm table-striped mb-0" id="naame_table">
               <thead class="table-dark">
                 <tr>
-                  <th>EntryNo</th>
+                  <th style="width:70px">EntryNo</th>
                   <th>Party</th>
                   <th>Broker</th>
-                  <th>Amount</th>
-                  <th>Remark</th>
-                  <th>Action</th>
+                  <th style="width:110px" class="text-end">Amount</th>
+                  <th style="width:240px">Remark</th>
+                  <th style="width:110px">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {% for n in naame_entries %}
                   <tr data-entry="{{ n.entry_no }}">
                     <td>{{ n.entry_no }}</td>
-                    <td>{{ n.party.partyname }}</td>
-                    <td>{% if n.broker %}{{ n.broker.brokername|default:n.broker.name }}{% endif %}</td>
+                    <td>
+                      {% if n.party %}
+                        {% if n.party.partyname %}{{ n.party.partyname }}{% else %}{{ n.party }}{% endif %}
+                      {% else %}
+                        {{ n.party_name|default:'' }}
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if n.broker %}
+                        {% if n.broker.brokername %}{{ n.broker.brokername }}{% elif n.broker.name %}{{ n.broker.name }}{% else %}{{ n.broker }}{% endif %}
+                      {% else %}
+                        {{ n.broker_name|default:'' }}
+                      {% endif %}
+                    </td>
                     <td class="text-end">{{ n.amount }}</td>
-                    <td>{{ n.remark }}</td>
+                    <td>{{ n.remark|default:'' }}</td>
                     <td>
                       <button class="btn btn-sm btn-danger naame-remove-btn" data-entry="{{ n.entry_no }}">Remove</button>
                     </td>
@@ -246,7 +274,14 @@ document.addEventListener('DOMContentLoaded', function(){
       if(data.error){ alert(data.error); return; }
       const e=data.entry, t=document.querySelector('#jama_table tbody'), tr=document.createElement('tr');
       tr.dataset.entry = e.entry_no;
-      tr.innerHTML = `<td>${e.entry_no}</td><td>${e.party_name}</td><td>${e.broker_name}</td><td class="text-end">${parseFloat(e.amount).toFixed(2)}</td><td>${e.remark||''}</td><td><button class="btn btn-sm btn-danger jama-remove-btn" data-entry="${e.entry_no}">Remove</button></td>`;
+      tr.innerHTML = 
+        '<td>' + e.entry_no + '</td>' +
+        '<td>' + (e.party_name||'') + '</td>' +
+        '<td>' + (e.broker_name||'') + '</td>' +
+        '<td class="text-end">' + (parseFloat(e.amount||0).toFixed(2)) + '</td>' +
+        '<td>' + (e.remark ? String(e.remark) : '') + '</td>' +
+        '<td><button class="btn btn-sm btn-danger jama-remove-btn" data-entry="' + e.entry_no + '">Remove</button></td>';
+      
       t.appendChild(tr); updateTotals();
       document.getElementById('jama_amount').value=''; document.getElementById('jama_remark').value='';
     }).catch(()=>alert('Failed to add Jama'));
@@ -265,7 +300,14 @@ document.addEventListener('DOMContentLoaded', function(){
       if(data.error){ alert(data.error); return; }
       const e=data.entry, t=document.querySelector('#naame_table tbody'), tr=document.createElement('tr');
       tr.dataset.entry = e.entry_no;
-      tr.innerHTML = `<td>${e.entry_no}</td><td>${e.party_name}</td><td>${e.broker_name}</td><td class="text-end">${parseFloat(e.amount).toFixed(2)}</td><td>${e.remark||''}</td><td><button class="btn btn-sm btn-danger naame-remove-btn" data-entry="${e.entry_no}">Remove</button></td>`;
+      tr.innerHTML = 
+        '<td>' + e.entry_no + '</td>' +
+        '<td>' + (e.party_name||'') + '</td>' +
+        '<td>' + (e.broker_name||'') + '</td>' +
+        '<td class="text-end">' + (parseFloat(e.amount||0).toFixed(2)) + '</td>' +
+        '<td>' + (e.remark ? String(e.remark) : '') + '</td>' +
+        '<td><button class="btn btn-sm btn-danger naame-remove-btn" data-entry="' + e.entry_no + '">Remove</button></td>';
+      
       t.appendChild(tr); updateTotals();
       document.getElementById('naame_amount').value=''; document.getElementById('naame_remark').value='';
     }).catch(()=>alert('Failed to add Naame'));

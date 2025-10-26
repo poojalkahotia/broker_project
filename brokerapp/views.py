@@ -1246,71 +1246,131 @@ def daily_page_naame_delete(request, entry_no):
     entry.delete()
     return JsonResponse({'success': True, 'entry_no': entry_no})
 
+
+
 def daily_page_pdf(request):
     date = request.GET.get('date')
     if not date:
         return HttpResponse("Date not provided", status=400)
 
-    # Get data
-    jama_entries = JamaEntry.objects.filter(daily_page__date=date)
-    naame_entries = NaameEntry.objects.filter(daily_page__date=date)
+    # Query entries
+    jama_entries = list(JamaEntry.objects.filter(daily_page__date=date).order_by('entry_no'))
+    naame_entries = list(NaameEntry.objects.filter(daily_page__date=date).order_by('entry_no'))
 
-    total_jama = sum(j.amount for j in jama_entries)
-    total_naame = sum(n.amount for n in naame_entries)
+    total_jama = sum(float(j.amount or 0) for j in jama_entries)
+    total_naame = sum(float(n.amount or 0) for n in naame_entries)
     diff = total_jama - total_naame
 
-    # Create PDF
-    pdf = FPDF()
+    # --- PDF setup (landscape A4) ---
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, f"Daily Report - {date}", ln=True, align="C")
-    pdf.ln(10)
+    pdf.ln(6)
 
-    # --- Jama Table (Left Side) ---
+    # Column layout (left and right table)
+    # A4 landscape usable width ~= 277mm (after small margins). We'll split into two panels.
+    left_x = 12
+    right_x = 12 + 137 + 8  # left panel width + small gap
+    panel_width = 137  # width for each table panel
+
+    # Column widths inside a panel (sum <= panel_width)
+    # no, party, broker, amount, remark
+    w_no = 10
+    w_party = 48
+    w_broker = 38
+    w_amount = 22
+    w_remark = panel_width - (w_no + w_party + w_broker + w_amount)  # remaining
+
+    # Header row height
+    hdr_h = 8
+    row_h = 8
+
+    # Function to draw a single panel (list of entries)
+    def draw_panel(x, y, title, entries):
+        pdf.set_xy(x, y)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(panel_width, 6, title, ln=1)
+
+        # table header
+        pdf.set_font("Arial", "B", 10)
+        pdf.set_xy(x, pdf.get_y())
+        pdf.cell(w_no, hdr_h, "No", border=1, align="C")
+        pdf.cell(w_party, hdr_h, "Party", border=1, align="L")
+        pdf.cell(w_broker, hdr_h, "Broker", border=1, align="L")
+        pdf.cell(w_amount, hdr_h, "Amount", border=1, align="R")
+        pdf.cell(w_remark, hdr_h, "Remark", border=1, align="L")
+        pdf.ln(hdr_h)
+
+        # rows
+        pdf.set_font("Arial", "", 10)
+        for e in entries:
+            # ensure we don't go beyond bottom margin - FPDF auto-adds page if needed
+            pdf.set_x(x)
+            pdf.cell(w_no, row_h, str(e.entry_no), border=1)
+            # party (truncate if too long)
+            party_text = getattr(e.party, "partyname", str(e.party) if e.party else "")
+            if len(party_text) > 35:
+                party_text = party_text[:32] + "..."
+            pdf.cell(w_party, row_h, party_text, border=1)
+            # broker
+            broker_text = getattr(e.broker, "brokername", str(e.broker) if e.broker else "")
+            if len(broker_text) > 30:
+                broker_text = broker_text[:27] + "..."
+            pdf.cell(w_broker, row_h, broker_text, border=1)
+            # amount (right aligned)
+            pdf.cell(w_amount, row_h, f"{float(e.amount or 0):.2f}", border=1, align="R")
+            # remark - truncate
+            remark_text = (e.remark or "")
+            if len(remark_text) > 40:
+                remark_text = remark_text[:37] + "..."
+            pdf.cell(w_remark, row_h, remark_text, border=1)
+            pdf.ln(row_h)
+
+        # after rows: draw total under Amount column (aligned under amount cell)
+        # Move to the footer row position (we'll draw a row showing 'Total' in the left columns and value under Amount)
+        pdf.set_x(x)
+        # create a cell spanning no+party+broker widths with label 'Total'
+        span_width = w_no + w_party + w_broker
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(span_width, hdr_h, "Total", border='T')
+        # amount cell with top border
+        # compute the total for this panel
+        panel_total = sum(float(ent.amount or 0) for ent in entries)
+        pdf.cell(w_amount, hdr_h, f"{panel_total:.2f}", border='T', align="R")
+        # empty remark cell
+        pdf.cell(w_remark, hdr_h, "", border='T')
+        pdf.ln(hdr_h + 4)  # small gap after table
+
+    # Draw both panels side-by-side starting from current y
+    start_y = pdf.get_y()
+    draw_panel(left_x, start_y, "Jama", jama_entries)
+    draw_panel(right_x, start_y, "Naame", naame_entries)
+
+    # Summary line (below panels)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(90, 10, "Jama", ln=0, align="L")
-    pdf.cell(90, 10, "Naame", ln=1, align="L")
-
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(10, 8, "No", border=1)
-    pdf.cell(45, 8, "Party", border=1)
-    pdf.cell(25, 8, "Amount", border=1, align="R")
-    pdf.cell(10, 8, "", border=0)
-    pdf.cell(10, 8, "No", border=1)
-    pdf.cell(45, 8, "Party", border=1)
-    pdf.cell(25, 8, "Amount", border=1, align="R")
-    pdf.ln()
-
-    pdf.set_font("Arial", "", 10)
-    max_len = max(len(jama_entries), len(naame_entries))
-    for i in range(max_len):
-        if i < len(jama_entries):
-            j = jama_entries[i]
-            pdf.cell(10, 8, str(j.entry_no), border=1)
-            pdf.cell(45, 8, j.party.partyname, border=1)
-            pdf.cell(25, 8, f"{j.amount:.2f}", border=1, align="R")
-        else:
-            pdf.cell(80, 8, "", border=0)
-        pdf.cell(10, 8, "", border=0)
-        if i < len(naame_entries):
-            n = naame_entries[i]
-            pdf.cell(10, 8, str(n.entry_no), border=1)
-            pdf.cell(45, 8, n.party.partyname, border=1)
-            pdf.cell(25, 8, f"{n.amount:.2f}", border=1, align="R")
-        else:
-            pdf.cell(80, 8, "", border=0)
-        pdf.ln()
-
+    # Put jama total on left area
+    pdf.set_xy(left_x, pdf.get_y())
+    pdf.cell(120, 8, f"Jama Total: {total_jama:.2f}", ln=0)
+    # Put naame total on right area
+    # place it roughly under right panel
+    pdf.set_xy(right_x, pdf.get_y())
+    pdf.cell(120, 8, f"Naame Total: {total_naame:.2f}", ln=0)
     pdf.ln(10)
+    # Difference on the right aligned
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(90, 8, f"Jama Total: {total_jama:.2f}", ln=0)
-    pdf.cell(90, 8, f"Naame Total: {total_naame:.2f}", ln=1)
-    pdf.ln(5)
-    pdf.cell(0, 8, f"Difference (Jama - Naame): {diff:.2f}", ln=1, align="R")
+    # align right towards page right margin
+    page_right = pdf.w - 12
+    diff_text = f"Difference (Jama - Naame): {diff:.2f}"
+    text_width = pdf.get_string_width(diff_text) + 2
+    pdf.set_xy(page_right - text_width, pdf.get_y())
+    pdf.cell(text_width, 8, diff_text, ln=1, align='R')
 
-    # --- Return response ---
-    pdf_bytes = pdf.output(dest='S').encode('latin1')  # ✅ correct way
+    # Output and return
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="DailyReport_{date}.pdf"'
     return response
+
 
