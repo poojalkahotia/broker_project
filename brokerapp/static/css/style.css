@@ -117,21 +117,22 @@ body.login-page .login-card {
 
 /* predictable table columns */
 #jama_table, #naame_table {
-  table-layout: fixed;      /* consistent column sizing so ellipsis works */
+  /* let browser size columns naturally so header text doesn't get forced to per-letter wrap */
+  table-layout: auto;
   width: 100%;
 }
 
-/* explicit column widths (tuned) */
+/* explicit column widths (tuned) — widen Broker to avoid letter stacking */
 #jama_table th:nth-child(1),
 #naame_table th:nth-child(1) { width: 6%; }   /* EntryNo */
 #jama_table th:nth-child(2),
-#naame_table th:nth-child(2) { width: 34%; }  /* Party (wider) */
+#naame_table th:nth-child(2) { width: 32%; }  /* Party */
 #jama_table th:nth-child(3),
-#naame_table th:nth-child(3) { width: 16%; }  /* Broker (wider) */
+#naame_table th:nth-child(3) { width: 20%; }  /* Broker (widened) */
 #jama_table th:nth-child(4),
 #naame_table th:nth-child(4) { width: 12%; }  /* Amount */
 #jama_table th:nth-child(5),
-#naame_table th:nth-child(5) { width: 26%; }  /* Remark */
+#naame_table th:nth-child(5) { width: 24%; }  /* Remark */
 #jama_table th:nth-child(6),
 #naame_table th:nth-child(6) { width: 6%; }   /* Action */
 
@@ -164,13 +165,27 @@ body.login-page .login-card {
   text-overflow: ellipsis;
 }
 
-/* Table header styling */
+/* Table header styling - prevent headers from being split into vertical letters */
 #jama_table thead th, #naame_table thead th {
   vertical-align: middle;
   text-align: left;
   padding: .65rem .75rem;
   box-sizing: border-box;
+
+ /* Defensive: prevent vertical / per-letter wrapping */
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  word-wrap: normal;
+  line-height: 1.2;
+  min-width: 60px;
 }
+
+/* Ensure Broker header column cannot become too narrow */
+#jama_table th:nth-child(3),
+#naame_table th:nth-child(3) {
+  min-width: 120px;
+}  
 
 /* Reduce default cell padding slightly to fit more content */
 #jama_table td, #naame_table td {
@@ -352,3 +367,89 @@ body.login-page .login-card {
 }
 
 /* END OF custom.css */
+/* ===== Professional table look for Daily Page =====
++   Apply class `table-professional` to tables on daily page.
+   Uses corporate navy accent for header and subtle stripes for rows. */
+.table-professional {
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.table-professional thead th {
+  background: #0b3d91;      /* navy header */
+  color: #ffffff;
+  font-weight: 600;
+  font-size: .95rem;
+  padding: .55rem .75rem;
+  vertical-align: middle;
+  white-space: nowrap;      /* prevent per-letter wrap */
+  line-height: 1.1;
+  border-bottom: 0;
+}
+.table-professional tbody td {
+  background: #ffffff;
+  color: #222;
+  padding: .55rem .75rem;
+  vertical-align: middle;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.table-professional tbody tr:nth-child(odd) td {
+  background: #fbfbfc; /* subtle stripe */
+}
+.table-professional tbody tr:hover td {
+  background: linear-gradient(90deg, rgba(245,166,35,0.06), rgba(11,61,145,0.02));
+}
+
+/* Amount column (right aligned, fixed width) */
+.table-professional th.amount-col, .table-professional td.amount-col {
+  text-align: right;
+  white-space: nowrap;
+  width: 110px;
+  min-width: 90px;
+}
+
+/* Broker and Party - avoid letter stacking on narrow screens */
+.table-professional th, .table-professional td {
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+.table-professional th.broker-col, .table-professional td.broker-col {
+  min-width: 120px;
+  max-width: 220px;
+}
+
+/* Remark column: allow truncation on desktop, wrap on small screens */
+.table-professional td.remark-col {
+  max-width: 240px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (max-width: 768px) {
+  .table-professional td.remark-col,
+  .table-professional td.party-col {
+    white-space: normal; /* wrap on small screens for readability */
+  }
+  .table-professional thead th { white-space: nowrap; }
+}
+
+/* Tight header height (compact) */
+.table-professional thead th { padding-top: .45rem; padding-bottom: .45rem; }
+
+/* Small helper: make action buttons compact and centered */
+.table-professional td .btn {
+  min-width: 64px;
+  padding: .28rem .5rem;
+  font-size: .85rem;
+}
+
+/* Make table header total small on right of card header consistent */
+.card-header .text-muted { color: rgba(255,255,255,0.9); }
+
