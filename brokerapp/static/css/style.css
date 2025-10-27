@@ -1,398 +1,67 @@
-/* ===== Broker Project — custom.css (ready to paste) ===== */
+/* ===== broker_project — custom.css (cleaned) ===== */
 
-/* Navbar styling (unchanged) */
+/* --- Navbar / common --- */
 .navbar-custom {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
 }
-
 .navbar-custom .nav-link,
 .navbar-custom .navbar-brand {
-    color: #343a40;
-    font-weight: 500;
+  color: #343a40;
+  font-weight: 500;
 }
+.navbar-custom .nav-link:hover { color: #0d6efd; }
 
-.navbar-custom .nav-link:hover {
-    color: #0d6efd;
-}
-
-/* Login page specific styling */
+/* --- Login card --- */
 body.login-page .login-card {
   padding: 2rem;
-  border-radius: 0.75rem;
+  border-radius: .75rem;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  background-color: #ffffff;
+  background: #fff;
   width: 100%;
   max-width: 400px;
-  box-sizing: border-box;
 }
 
-/* Prevent labels from wrapping */
-.nowrap-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* --- Form & utility --- */
+.nowrap-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.form-label { font-weight: 500; font-size: 14px; margin-bottom: 0; }
+.form-control-sm { height: 32px; font-size: 14px; padding: 4px 8px; }
+.d-flex.align-items-center label { flex-shrink: 0; }
 
-/* Make sure flex items don't shrink weirdly */
-.d-flex.align-items-center label {
-  flex-shrink: 0;
-}
-
-/* Compact and neat form look */
-.form-label {
-  font-weight: 500;
-  font-size: 14px;
-  margin-bottom: 0;
-}
-
-.form-control-sm {
-  height: 32px;
-  font-size: 14px;
-  padding: 4px 8px;
-}
-
-/* Balance input width */
-.d-flex .form-control-sm {
-  max-width: 200px;
-}
-
-/* Small vertical space between rows */
-.d-flex {
-  margin-bottom: 6px;
-}
-
-/* ===== Action buttons: keep Edit/Delete inline on mobile =====
-   This block enforces inline buttons only on <=768px so desktop stays untouched. */
+/* --- Responsive action buttons helper --- */
 @media (max-width: 768px) {
-  .action-btns,
-  td .action-btns,
-  td .action-btns > .action-btns-inner {
-    display: inline-flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    gap: 8px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  /* Buttons inside action wrapper */
-  .action-btns .btn,
-  td .action-btns > .btn {
-    display: inline-flex !important;
-    flex: 0 0 auto !important;
-    width: auto !important;
-    min-width: 44px !important;
-    padding: .28rem .6rem !important;
-    font-size: .88rem !important;
-    white-space: nowrap !important;
-  }
-
-  /* defensive: undo .w-100 / .d-block used on buttons */
-  .action-btns .w-100,
-  .action-btns .d-block,
-  td .action-btns .w-100,
-  td .action-btns .d-block {
-    display: inline-flex !important;
-    width: auto !important;
-  }
-
-  /* table cells — vertical align center */
-  .table td {
-    vertical-align: middle !important;
-  }
+  .action-btns, td .action-btns { display: inline-flex !important; gap: 8px !important; white-space: nowrap !important; }
+  .action-btns .btn, td .action-btns > .btn { min-width: 44px !important; padding: .28rem .6rem !important; font-size: .88rem !important; }
+  .table td { vertical-align: middle !important; }
 }
-
-/* tiny screens - slightly smaller buttons */
 @media (max-width: 420px) {
-  .action-btns .btn {
-    padding: .22rem .45rem !important;
-    font-size: .82rem !important;
-    min-width: 40px !important;
-  }
+  .action-btns .btn { padding: .22rem .45rem !important; font-size: .82rem !important; min-width: 40px !important; }
 }
 
-/* ===== Daily Page layout rules ===== */
+/* ===== Daily page specific ===== */
 
-/* predictable table columns */
-#jama_table, #naame_table {
-  /* let browser size columns naturally so header text doesn't get forced to per-letter wrap */
-  table-layout: auto;
-  width: 100%;
-}
-
-/* explicit column widths (tuned) — widen Broker to avoid letter stacking */
-#jama_table th:nth-child(1),
-#naame_table th:nth-child(1) { width: 6%; }   /* EntryNo */
-#jama_table th:nth-child(2),
-#naame_table th:nth-child(2) { width: 32%; }  /* Party */
-#jama_table th:nth-child(3),
-#naame_table th:nth-child(3) { width: 20%; }  /* Broker (widened) */
-#jama_table th:nth-child(4),
-#naame_table th:nth-child(4) { width: 12%; }  /* Amount */
-#jama_table th:nth-child(5),
-#naame_table th:nth-child(5) { width: 24%; }  /* Remark */
-#jama_table th:nth-child(6),
-#naame_table th:nth-child(6) { width: 6%; }   /* Action */
-
-/* Party & Broker & Amount cells: keep single-line with ellipsis on desktop */
-#jama_table td:nth-child(2),
-#naame_table td:nth-child(2),
-#jama_table td:nth-child(3),
-#naame_table td:nth-child(3),
-#jama_table td:nth-child(4),
-#naame_table td:nth-child(4) {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Amount column: right aligned and no wrap */
-#jama_table td:nth-child(4),
-#naame_table td:nth-child(4),
-#jama_table th:nth-child(4),
-#naame_table th:nth-child(4) {
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* Remark column: single-line with ellipsis (desktop); allows wrapping on small screens */
-#jama_table td:nth-child(5),
-#naame_table td:nth-child(5) {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Table header styling - prevent headers from being split into vertical letters */
-#jama_table thead th, #naame_table thead th {
-  vertical-align: middle;
-  text-align: left;
-  padding: .65rem .75rem;
-  box-sizing: border-box;
-
- /* Defensive: prevent vertical / per-letter wrapping */
-  white-space: nowrap;
-  word-break: normal;
-  overflow-wrap: normal;
-  word-wrap: normal;
-  line-height: 1.2;
-  min-width: 60px;
-}
-
-/* Ensure Broker header column cannot become too narrow */
-#jama_table th:nth-child(3),
-#naame_table th:nth-child(3) {
-  min-width: 120px;
-}  
-
-/* Reduce default cell padding slightly to fit more content */
-#jama_table td, #naame_table td {
-  padding: .55rem .65rem;
-  vertical-align: middle;
-  box-sizing: border-box;
-}
-
-/* Card / table growth behavior: let card size to content (prevents forced full-height) */
-.card.shadow-sm.d-flex.flex-column {
-  flex: 0 1 auto;
-}
-
-/* Allow tables to expand naturally; vertical scrolling only when necessary */
-.card .table-responsive {
-  overflow-y: auto;
-  max-height: 60vh; /* allows the table area to scroll when many rows exist */
-}
-
-/* Top-row inputs (Jama/Naame) */
-#jama_form .form-control#jama_amount,
-#naame_form .form-control#naame_amount {
-  max-width: 140px;
-  width: 100%;
-  box-sizing: border-box;
-  text-align: right;
-}
-
-#jama_form .form-control#jama_remark,
-#naame_form .form-control#naame_remark {
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* Add button alignment (keeps the Add button vertically aligned) */
-#jama_form .col-md-1,
-#naame_form .col-md-1 {
-  display: grid;
-  align-items: end;
-}
-
-/* Table vertical alignment ensure */
-#jama_table td, #naame_table td { vertical-align: middle; }
-
-/* Responsive tweaks */
-@media (max-width: 1200px) {
-  #jama_table th:nth-child(2),
-  #naame_table th:nth-child(2) { width: 36%; }
-  #jama_table th:nth-child(3),
-  #naame_table th:nth-child(3) { width: 14%; }
-  #jama_table th:nth-child(5),
-  #naame_table th:nth-child(5) { width: 28%; }
-}
-
-/* Small screens: allow party & remark to wrap for readability */
-@media (max-width: 768px) {
-  #jama_table td:nth-child(5), #naame_table td:nth-child(5) {
-    white-space: normal;  /* allow wrapping to 2+ lines */
-  }
-  #jama_table td:nth-child(2), #naame_table td:nth-child(2) {
-    white-space: normal;
-  }
-  /* on narrow screens, allow horizontal scroll for whole table if needed */
-  .table-responsive { overflow-x: auto; }
-}
-
-/* Small polish: reduce table header font slightly */
-#jama_table thead th, #naame_table thead th {
-  font-size: 0.95rem;
-}
-
-/* Accessibility: ensure focus outlines remain visible */
-.btn:focus, .form-control:focus {
-  outline: 2px solid rgba(11,61,145,0.12);
-  outline-offset: 0;
-}
-
-/* ===== Print layout rules moved into custom.css (no inline styles required) ===== */
-
-/* Hide elements on print (show on screen) */
-.no-print, .d-print-none {
-  display: inline; /* visible on screen; hidden by @media print below */
-}
-@media print {
-  .no-print, .d-print-none { display: none !important; }
-}
-
-/* Print wrapper - left: tables, right: stacked totals */
-@media print {
-  .report-print-wrapper {
-    width:100%;
-    display:flex;
-    gap:1rem;
-    align-items:flex-start;
-    box-sizing:border-box;
-    padding:0;
-    margin:0;
-    flex-wrap: wrap; /* allow wrap if paper narrow */
-  }
-  .report-print-left { width:62%; box-sizing:border-box; min-width: 280px; }
-  .report-print-right { width:36%; box-sizing:border-box; padding-left:8px; min-width: 180px; }
-
-  /* Print table compact rules */
-  .table-print { border-collapse: collapse; width:100%; font-size:10pt; }
-  .table-print th, .table-print td { border:1px solid #000; padding:.35rem .5rem; }
-  .table-print th { background:#eee; font-weight:700; }
-
-  /* Totals stacked on right */
-  .print-totals { text-align:right; font-weight:700; margin-top:.4rem; line-height:1.6; }
-  .print-totals .tot-line { display:block; font-size:11pt; margin-bottom:.25rem; }
-
-  /* avoid large card shadows in print */
-  .card, .shadow-sm { box-shadow: none !important; background: transparent !important; }
-  body {
-    background:#fff !important;
-    color:#000 !important;
-    -webkit-print-color-adjust: exact; /* Chrome/Safari */
-    print-color-adjust: exact;         /* Standard */
-  }
-  .table-responsive { overflow: visible !important; }
-}
-
-/* ===== Vertical Totals Layout for Sale Report (screen + print friendly) ===== */
-.overall-totals-vertical {
-  max-width: 420px;
-  margin-left: auto;
-  margin-right: 0;
-}
-
-.overall-totals-vertical .totals-box {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  font-size: 15px;
-  color: #222;
-}
-
-.overall-totals-vertical .total-line {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  border-bottom: 1px dashed #ccc;
-  padding-bottom: 2px;
-}
-
-.overall-totals-vertical .total-line span {
-  font-weight: 500;
-  color: #0b3d91;
-}
-
-.overall-totals-vertical .total-line strong {
-  min-width: 80px;
-  text-align: right;
-  font-weight: 600;
-  color: #000;
-}
-
-/* last total (Net Amt) emphasized */
-.overall-totals-vertical .total-line.border-top {
-  border-top: 2px solid #0b3d91 !important;
-  border-bottom: none;
-  font-weight: 700;
-  color: #0b3d91;
-}
-
-/* print-friendly */
-@media print {
-  .overall-totals-vertical {
-    border: 1px solid #ccc;
-    padding: 8px 12px;
-    margin-top: 10px;
-    background: #fff;
-  }
-  .overall-totals-vertical .totals-box {
-    gap: 4px;
-    font-size: 12pt;
-  }
-}
-
-/* END OF custom.css */
-/* ===== Professional table look for Daily Page =====
-+   Apply class `table-professional` to tables on daily page.
-   Uses corporate navy accent for header and subtle stripes for rows. */
+/* Tables */
 .table-professional {
   border-collapse: separate;
   border-spacing: 0;
-  background: #fff;
   width: 100%;
+  background: #fff;
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 1px 6px rgba(0,0,0,0.06);
 }
 .table-professional thead th {
-  background: #0b3d91;      /* navy header */
-  color: #ffffff;
+  background: #0b3d91; /* navy */
+  color: #fff;
   font-weight: 600;
   font-size: .95rem;
-  padding: .55rem .75rem;
+  padding: .45rem .75rem;
   vertical-align: middle;
-  white-space: nowrap;      /* prevent per-letter wrap */
+  white-space: nowrap;
   line-height: 1.1;
   border-bottom: 0;
 }
 .table-professional tbody td {
-  background: #ffffff;
-  color: #222;
   padding: .55rem .75rem;
   vertical-align: middle;
   border-top: 1px solid rgba(0,0,0,0.06);
@@ -400,56 +69,61 @@ body.login-page .login-card {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.table-professional tbody tr:nth-child(odd) td {
-  background: #fbfbfc; /* subtle stripe */
-}
-.table-professional tbody tr:hover td {
-  background: linear-gradient(90deg, rgba(245,166,35,0.06), rgba(11,61,145,0.02));
-}
+.table-professional tbody tr:nth-child(odd) td { background: #fbfbfc; }
+.table-professional tbody tr:hover td { background: linear-gradient(90deg, rgba(245,166,35,0.06), rgba(11,61,145,0.02)); }
 
-/* Amount column (right aligned, fixed width) */
+/* column helpers */
 .table-professional th.amount-col, .table-professional td.amount-col {
   text-align: right;
   white-space: nowrap;
   width: 110px;
   min-width: 90px;
 }
-
-/* Broker and Party - avoid letter stacking on narrow screens */
-.table-professional th, .table-professional td {
-  word-break: normal;
-  overflow-wrap: normal;
-  hyphens: none;
-}
 .table-professional th.broker-col, .table-professional td.broker-col {
   min-width: 120px;
   max-width: 220px;
 }
+.table-professional td.remark-col { max-width: 240px; white-space: nowrap; text-overflow: ellipsis; }
 
-/* Remark column: allow truncation on desktop, wrap on small screens */
-.table-professional td.remark-col {
-  max-width: 240px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
+/* make header font slightly smaller and compact */
+.table-professional thead th { font-size: .95rem; padding-top: .4rem; padding-bottom: .4rem; }
+
+/* mobile: allow wrapping for readability */
 @media (max-width: 768px) {
-  .table-professional td.remark-col,
-  .table-professional td.party-col {
-    white-space: normal; /* wrap on small screens for readability */
-  }
-  .table-professional thead th { white-space: nowrap; }
+  .table-professional td.remark-col, .table-professional td.party-col { white-space: normal; }
+  .table-responsive { overflow-x: auto; }
 }
 
-/* Tight header height (compact) */
-.table-professional thead th { padding-top: .45rem; padding-bottom: .45rem; }
+/* card + table sizing */
+.card.shadow-sm.d-flex.flex-column { flex: 0 1 auto; }
+.card .table-responsive { overflow-y: auto; max-height: 60vh; }
 
-/* Small helper: make action buttons compact and centered */
-.table-professional td .btn {
-  min-width: 64px;
-  padding: .28rem .5rem;
-  font-size: .85rem;
+/* form inputs sizing in daily page */
+#jama_form .form-control#jama_amount, #naame_form .form-control#naame_amount {
+  max-width: 140px; width: 100%; box-sizing: border-box; text-align: right;
+}
+#jama_form .form-control#jama_remark, #naame_form .form-control#naame_remark { min-width: 0; overflow: hidden; }
+#jama_form .col-md-1, #naame_form .col-md-1 { display: grid; align-items: end; }
+
+/* accessibility focus */
+.btn:focus, .form-control:focus { outline: 2px solid rgba(11,61,145,0.12); outline-offset: 0; }
+
+/* ===== Print rules ===== */
+.no-print, .d-print-none { display: inline; }
+@media print {
+  .no-print, .d-print-none { display: none !important; }
+  .card, .shadow-sm { box-shadow: none !important; background: transparent !important; }
+  body { background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .table-responsive { overflow: visible !important; }
+  .table-print { border-collapse: collapse; width:100%; font-size:10pt; }
+  .table-print th, .table-print td { border:1px solid #000; padding:.35rem .5rem; }
+  .table-print th { background:#eee; font-weight:700; }
 }
 
-/* Make table header total small on right of card header consistent */
-.card-header .text-muted { color: rgba(255,255,255,0.9); }
-
+/* ===== Vertical totals helper (kept) ===== */
+.overall-totals-vertical { max-width: 420px; margin-left: auto; margin-right: 0; }
+.overall-totals-vertical .totals-box { display:flex; flex-direction:column; align-items:flex-end; gap:6px; font-size:15px; color:#222; }
+.overall-totals-vertical .total-line { display:flex; justify-content:space-between; width:100%; border-bottom:1px dashed #ccc; padding-bottom:2px; }
+.overall-totals-vertical .total-line span { font-weight:500; color:#0b3d91; }
+.overall-totals-vertical .total-line strong { min-width:80px; text-align:right; font-weight:600; color:#000; }
+.overall-totals-vertical .total-line.border-top { border-top:2px solid #0b3d91 !important; border-bottom:none; font-weight:700; color:#0b3d91; }

@@ -2,7 +2,6 @@
 {% load static %}
 {% block content %}
 <div class="container-fluid p-1 d-flex flex-column" style="max-width:98vw;">
-  <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-2">
     <h6 class="mb-0">Daily Page</h6>
     <div class="d-flex align-items-center">
@@ -14,33 +13,27 @@
     </div>
   </div>
 
-  <!-- show message when no entries for selected date -->
   {% if no_entries %}
-    <div class="alert alert-info">
-      ⚠️ <strong>No entry on that day</strong>
-    </div>
+    <div class="alert alert-info">⚠️ <strong>No entry on that day</strong></div>
   {% endif %}
 
-  <!-- Main Row -->
   <div class="row g-2">
     <!-- Jama Column -->
-    <div class="col-lg-6 d-flex flex-column h-100">
+    <div class="col-lg-6 d-flex flex-column">
       <div class="card shadow-sm d-flex flex-column">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Jama</h5>
           <div><small class="text-muted">Total: <span id="jama_total">0.00</span></small></div>
         </div>
+
         <div class="card-body d-flex flex-column p-2">
-          <!-- Form row -->
           <form id="jama_form" class="row g-2 align-items-end mb-2">
             {% csrf_token %}
             <div class="col-md-3">
               <label class="form-label">Party</label>
               <select name="party" id="jama_party" class="form-control">
                 <option value="">Select Party</option>
-                {% for p in parties %}
-                  <option value="{{ p.partyname }}">{{ p.partyname }}</option>
-                {% endfor %}
+                {% for p in parties %}<option value="{{ p.partyname }}">{{ p.partyname }}</option>{% endfor %}
               </select>
             </div>
 
@@ -48,34 +41,29 @@
               <label class="form-label">Broker</label>
               <select name="broker" id="jama_broker" class="form-control">
                 <option value="">Select Broker</option>
-                {% for b in brokers %}
-                  <option value="{{ b.brokername }}">{{ b.brokername }}</option>
-                {% endfor %}
+                {% for b in brokers %}<option value="{{ b.brokername }}">{{ b.brokername }}</option>{% endfor %}
               </select>
             </div>
 
             <div class="col-md-2">
               <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="jama_amount" class="form-control text-end" step="0.01" style="max-width:140px; width:100%;">
+              <input type="number" name="amount" id="jama_amount" class="form-control text-end" step="0.01">
             </div>
 
-            <div class="col-md-3" style="min-width:0;">
+            <div class="col-md-3">
               <label class="form-label">Remark</label>
-              <input type="text" name="remark" id="jama_remark" class="form-control" style="min-width:0;">
+              <input type="text" name="remark" id="jama_remark" class="form-control">
             </div>
 
             <div class="col-md-1 d-grid">
-              <!-- Use d-grid to vertically align button -->
               <label class="form-label invisible">Add</label>
               <button type="button" id="jama_add_btn" class="btn btn-success">Add</button>
             </div>
           </form>
 
-
-          <!-- Table -->
           <div class="table-responsive flex-grow-1" style="overflow-y:auto;">
-            <table class="table table-sm table-striped mb-0 table-professional" id="jama_table">
-              <thead class="table-dark">
+            <table class="table table-sm mb-0 table-professional" id="jama_table">
+              <thead>
                 <tr>
                   <th style="width:70px">EntryNo</th>
                   <th class="party-col">Party</th>
@@ -90,7 +78,6 @@
                   <tr data-entry="{{ j.entry_no }}">
                     <td>{{ j.entry_no }}</td>
                     <td>
-                      {# If j.party is a related object use its partyname, otherwise fall back to party_name string #}
                       {% if j.party %}
                         {% if j.party.partyname %}{{ j.party.partyname }}{% else %}{{ j.party }}{% endif %}
                       {% else %}
@@ -98,9 +85,10 @@
                       {% endif %}
                     </td>
                     <td>
-                      {# If j.broker is an object use brokername (or name), else broker_name string #}
                       {% if j.broker %}
-                        {% if j.broker.brokername %}{{ j.broker.brokername }}{% elif j.broker.name %}{{ j.broker.name }}{% else %}{{ j.broker }}{% endif %}
+                        {% if j.broker.brokername %}{{ j.broker.brokername }}
+                        {% elif j.broker.name %}{{ j.broker.name }}
+                        {% else %}{{ j.broker }}{% endif %}
                       {% else %}
                         {{ j.broker_name|default:'' }}
                       {% endif %}
@@ -120,23 +108,21 @@
     </div>
 
     <!-- Naame Column -->
-    <div class="col-lg-6 d-flex flex-column h-100">
-      <div class="card shadow-sm flex-grow-1 d-flex flex-column">
+    <div class="col-lg-6 d-flex flex-column">
+      <div class="card shadow-sm d-flex flex-column">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Naame</h5>
           <div><small class="text-muted">Total: <span id="naame_total">0.00</span></small></div>
         </div>
+
         <div class="card-body d-flex flex-column p-2">
-          <!-- Form row -->
           <form id="naame_form" class="row g-2 align-items-end mb-2">
             {% csrf_token %}
             <div class="col-md-3">
               <label class="form-label">Party</label>
               <select name="party" id="naame_party" class="form-control">
                 <option value="">Select Party</option>
-                {% for p in parties %}
-                  <option value="{{ p.partyname }}">{{ p.partyname }}</option>
-                {% endfor %}
+                {% for p in parties %}<option value="{{ p.partyname }}">{{ p.partyname }}</option>{% endfor %}
               </select>
             </div>
 
@@ -144,20 +130,18 @@
               <label class="form-label">Broker</label>
               <select name="broker" id="naame_broker" class="form-control">
                 <option value="">Select Broker</option>
-                {% for b in brokers %}
-                  <option value="{{ b.brokername }}">{{ b.brokername }}</option>
-                {% endfor %}
+                {% for b in brokers %}<option value="{{ b.brokername }}">{{ b.brokername }}</option>{% endfor %}
               </select>
             </div>
 
             <div class="col-md-2">
               <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="naame_amount" class="form-control text-end" step="0.01" style="max-width:140px; width:100%;">
+              <input type="number" name="amount" id="naame_amount" class="form-control text-end" step="0.01">
             </div>
 
-            <div class="col-md-3" style="min-width:0;">
+            <div class="col-md-3">
               <label class="form-label">Remark</label>
-              <input type="text" name="remark" id="naame_remark" class="form-control" style="min-width:0;">
+              <input type="text" name="remark" id="naame_remark" class="form-control">
             </div>
 
             <div class="col-md-1 d-grid">
@@ -166,10 +150,9 @@
             </div>
           </form>
 
-          <!-- Table -->
           <div class="table-responsive flex-grow-1" style="overflow-y:auto;">
-            <table class="table table-sm table-striped mb-0 table-professional" id="naame_table">
-              <thead class="table-dark">
+            <table class="table table-sm mb-0 table-professional" id="naame_table">
+              <thead>
                 <tr>
                   <th style="width:70px">EntryNo</th>
                   <th class="party-col">Party</th>
@@ -192,7 +175,9 @@
                     </td>
                     <td>
                       {% if n.broker %}
-                        {% if n.broker.brokername %}{{ n.broker.brokername }}{% elif n.broker.name %}{{ n.broker.name }}{% else %}{{ n.broker }}{% endif %}
+                        {% if n.broker.brokername %}{{ n.broker.brokername }}
+                        {% elif n.broker.name %}{{ n.broker.name }}
+                        {% else %}{{ n.broker }}{% endif %}
                       {% else %}
                         {{ n.broker_name|default:'' }}
                       {% endif %}
@@ -212,7 +197,7 @@
     </div>
   </div>
 
-  <!-- Summary Row -->
+  <!-- Summary -->
   <div class="row mt-2">
     <div class="col-12">
       <div class="card border-0 p-2">
@@ -233,107 +218,111 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', function() {
   const dateInput = document.getElementById('dp_date');
-  // default to today if not set
-  if(!dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+  if (!dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
 
-  // Show button: reload the page with the selected date as GET param
-  document.getElementById('btn_show').addEventListener('click', function(){
+  document.getElementById('btn_show').addEventListener('click', function() {
     const d = dateInput.value;
-    if(!d) return alert('Please select a date.');
-    // navigate to same endpoint with ?date=YYYY-MM-DD
-    const base = window.location.pathname;
-    window.location.href = base + '?date=' + encodeURIComponent(d);
+    if (!d) return alert('Please select a date.');
+    window.location.href = window.location.pathname + '?date=' + encodeURIComponent(d);
   });
 
-  // existing CSRF token inside each form - pick one
-  const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : '';
+  const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]') ?
+                    document.querySelector('[name=csrfmiddlewaretoken]').value : '';
 
   function formatNum(n){ return parseFloat(n||0).toFixed(2); }
-  function sumColumn(sel){ let s=0; document.querySelectorAll(sel+' tbody tr').forEach(tr=>{ const v=tr.querySelector('td:nth-child(4)'); if(v) s+=parseFloat(v.textContent.trim()||0); }); return s; }
+  function sumColumn(sel){
+    let s = 0;
+    document.querySelectorAll(sel + ' tbody tr').forEach(tr => {
+      const v = tr.querySelector('td:nth-child(4)');
+      if (v) s += parseFloat(v.textContent.trim() || 0);
+    });
+    return s;
+  }
   function updateTotals(){
     const j = sumColumn('#jama_table'), n = sumColumn('#naame_table');
     document.getElementById('jama_total').textContent = formatNum(j);
     document.getElementById('naame_total').textContent = formatNum(n);
     document.getElementById('jama_total_display').textContent = formatNum(j);
     document.getElementById('naame_total_display').textContent = formatNum(n);
-    document.getElementById('diff_display').textContent = formatNum(j-n);
+    document.getElementById('diff_display').textContent = formatNum(j - n);
   }
 
-  // Add Jama
-  document.getElementById('jama_add_btn').addEventListener('click', ()=>{
-    const d = dateInput.value, p = document.getElementById('jama_party').value, b = document.getElementById('jama_broker').value, a = document.getElementById('jama_amount').value, r = document.getElementById('jama_remark').value.trim();
-    if(!d||!p||!b||!a) return alert('Please fill Party, Broker and Amount for Jama');
-    fetch('{% url "daily_page_jama_add" %}',{
-      method:'POST',
-      headers:{'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({date:d, party:p, broker:b, amount:a, remark:r})
+  // Add handlers
+  document.getElementById('jama_add_btn').addEventListener('click', () => {
+    const d = dateInput.value, p = document.getElementById('jama_party').value,
+          b = document.getElementById('jama_broker').value, a = document.getElementById('jama_amount').value,
+          r = document.getElementById('jama_remark').value.trim();
+    if (!d || !p || !b || !a) return alert('Please fill Party, Broker and Amount for Jama');
+    fetch('{% url "daily_page_jama_add" %}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({date: d, party: p, broker: b, amount: a, remark: r})
     })
-    .then(r=>r.json()).then(data=>{
-      if(data.error){ alert(data.error); return; }
-      const e=data.entry, t=document.querySelector('#jama_table tbody'), tr=document.createElement('tr');
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert(data.error); return; }
+      const e = data.entry, t = document.querySelector('#jama_table tbody'), tr = document.createElement('tr');
       tr.dataset.entry = e.entry_no;
-      tr.innerHTML = 
+      tr.innerHTML =
         '<td>' + e.entry_no + '</td>' +
-        '<td>' + (e.party_name||'') + '</td>' +
-        '<td>' + (e.broker_name||'') + '</td>' +
-        '<td class="text-end">' + (parseFloat(e.amount||0).toFixed(2)) + '</td>' +
+        '<td>' + (e.party_name || '') + '</td>' +
+        '<td>' + (e.broker_name || '') + '</td>' +
+        '<td class="text-end">' + (parseFloat(e.amount || 0).toFixed(2)) + '</td>' +
         '<td>' + (e.remark ? String(e.remark) : '') + '</td>' +
         '<td><button class="btn btn-sm btn-danger jama-remove-btn" data-entry="' + e.entry_no + '">Remove</button></td>';
-      
       t.appendChild(tr); updateTotals();
-      document.getElementById('jama_amount').value=''; document.getElementById('jama_remark').value='';
-    }).catch(()=>alert('Failed to add Jama'));
+      document.getElementById('jama_amount').value = ''; document.getElementById('jama_remark').value = '';
+    }).catch(() => alert('Failed to add Jama'));
   });
 
-  // Add Naame
-  document.getElementById('naame_add_btn').addEventListener('click', ()=>{
-    const d = dateInput.value, p = document.getElementById('naame_party').value, b = document.getElementById('naame_broker').value, a = document.getElementById('naame_amount').value, r = document.getElementById('naame_remark').value.trim();
-    if(!d||!p||!b||!a) return alert('Please fill Party, Broker and Amount for Naame');
-    fetch('{% url "daily_page_naame_add" %}',{
-      method:'POST',
-      headers:{'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({date:d, party:p, broker:b, amount:a, remark:r})
+  document.getElementById('naame_add_btn').addEventListener('click', () => {
+    const d = dateInput.value, p = document.getElementById('naame_party').value,
+          b = document.getElementById('naame_broker').value, a = document.getElementById('naame_amount').value,
+          r = document.getElementById('naame_remark').value.trim();
+    if (!d || !p || !b || !a) return alert('Please fill Party, Broker and Amount for Naame');
+    fetch('{% url "daily_page_naame_add" %}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({date: d, party: p, broker: b, amount: a, remark: r})
     })
-    .then(r=>r.json()).then(data=>{
-      if(data.error){ alert(data.error); return; }
-      const e=data.entry, t=document.querySelector('#naame_table tbody'), tr=document.createElement('tr');
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert(data.error); return; }
+      const e = data.entry, t = document.querySelector('#naame_table tbody'), tr = document.createElement('tr');
       tr.dataset.entry = e.entry_no;
-      tr.innerHTML = 
+      tr.innerHTML =
         '<td>' + e.entry_no + '</td>' +
-        '<td>' + (e.party_name||'') + '</td>' +
-        '<td>' + (e.broker_name||'') + '</td>' +
-        '<td class="text-end">' + (parseFloat(e.amount||0).toFixed(2)) + '</td>' +
+        '<td>' + (e.party_name || '') + '</td>' +
+        '<td>' + (e.broker_name || '') + '</td>' +
+        '<td class="text-end">' + (parseFloat(e.amount || 0).toFixed(2)) + '</td>' +
         '<td>' + (e.remark ? String(e.remark) : '') + '</td>' +
         '<td><button class="btn btn-sm btn-danger naame-remove-btn" data-entry="' + e.entry_no + '">Remove</button></td>';
-      
       t.appendChild(tr); updateTotals();
-      document.getElementById('naame_amount').value=''; document.getElementById('naame_remark').value='';
-    }).catch(()=>alert('Failed to add Naame'));
+      document.getElementById('naame_amount').value = ''; document.getElementById('naame_remark').value = '';
+    }).catch(() => alert('Failed to add Naame'));
   });
 
-  // Delete handlers (POST endpoints expected)
-  document.addEventListener('click', e=>{
-    if(e.target.matches('.jama-remove-btn')){
-      const id = e.target.dataset.entry; if(!confirm('Remove this Jama entry?')) return;
-      fetch(`{% url 'daily_page_jama_delete' 0 %}`.replace('/0/',`/${id}/`), { method:'POST', headers:{'X-CSRFToken': csrftoken} })
-      .then(r=>r.json()).then(d=>{ if(d.success){ document.querySelector(`#jama_table tr[data-entry="${id}"]`)?.remove(); updateTotals(); } else alert('Failed to delete'); });
+  // Delete handlers (delegated)
+  document.addEventListener('click', e => {
+    if (e.target.matches('.jama-remove-btn')) {
+      const id = e.target.dataset.entry; if (!confirm('Remove this Jama entry?')) return;
+      fetch(`{% url 'daily_page_jama_delete' 0 %}`.replace('/0/', `/${id}/`), { method:'POST', headers:{'X-CSRFToken': csrftoken} })
+      .then(r => r.json()).then(d => { if (d.success) { document.querySelector(`#jama_table tr[data-entry="${id}"]`)?.remove(); updateTotals(); } else alert('Failed to delete'); });
     }
-    if(e.target.matches('.naame-remove-btn')){
-      const id = e.target.dataset.entry; if(!confirm('Remove this Naame entry?')) return;
-      fetch(`{% url 'daily_page_naame_delete' 0 %}`.replace('/0/',`/${id}/`), { method:'POST', headers:{'X-CSRFToken': csrftoken} })
-      .then(r=>r.json()).then(d=>{ if(d.success){ document.querySelector(`#naame_table tr[data-entry="${id}"]`)?.remove(); updateTotals(); } else alert('Failed to delete'); });
+    if (e.target.matches('.naame-remove-btn')) {
+      const id = e.target.dataset.entry; if (!confirm('Remove this Naame entry?')) return;
+      fetch(`{% url 'daily_page_naame_delete' 0 %}`.replace('/0/', `/${id}/`), { method:'POST', headers:{'X-CSRFToken': csrftoken} })
+      .then(r => r.json()).then(d => { if (d.success) { document.querySelector(`#naame_table tr[data-entry="${id}"]`)?.remove(); updateTotals(); } else alert('Failed to delete'); });
     }
   });
 
-  // PDF
-  document.getElementById('btn_pdf').addEventListener('click', ()=>{
-    const d = dateInput.value; if(!d) return alert('Select a date first');
+  document.getElementById('btn_pdf').addEventListener('click', () => {
+    const d = dateInput.value; if (!d) return alert('Select a date first');
     window.location.href = `{% url 'daily_page_pdf' %}?date=${d}`;
   });
 
-  // calculate totals initially
   updateTotals();
 });
 </script>
