@@ -1,8 +1,11 @@
 from django.db import models
+from django.contrib.auth.models import User
+from django.utils.translation import gettext_lazy as _
 
 # Create your models here.
 class HeadParty(models.Model):
     partyname = models.CharField(max_length=100, primary_key=True)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
     add1 = models.CharField(max_length=200, blank=True)
     add2 = models.CharField(max_length=200, blank=True)
     city = models.CharField(max_length=100, blank=True)
@@ -18,6 +21,7 @@ class HeadParty(models.Model):
 
 class Broker(models.Model):
     brokername = models.CharField(max_length=100, primary_key=True)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
     mobileno = models.CharField(max_length=15, blank=True)
     email = models.EmailField(blank=True)
     openingdebit = models.DecimalField(max_digits=10, decimal_places=2, default=0, blank=True, null=True)
@@ -29,12 +33,14 @@ class Broker(models.Model):
     
 class HeadItem(models.Model):
     item_name = models.CharField(max_length=100, primary_key=True)
-
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
     def __str__(self):
         return self.item_name
     
 class SaleMaster(models.Model):
     invno = models.AutoField(primary_key=True)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     invdate = models.DateField()
     awakno = models.CharField(max_length=50, blank=True, null=True)
 
@@ -102,6 +108,8 @@ class SaleDetails(models.Model):
        
 class PurchaseMaster(models.Model):
     invno = models.AutoField(primary_key=True)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     invdate = models.DateField()
     awakno = models.CharField(max_length=50, blank=True, null=True)
 
@@ -162,8 +170,14 @@ class PurchaseDetails(models.Model):
 
 
 class DailyPage(models.Model):
-    date = models.DateField(unique=True)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['org', 'date'], name='uniq_dailypage_per_org_date')
+        ]
 
     def __str__(self):
         return f"DailyPage {self.date}"
@@ -198,4 +212,31 @@ class NaameEntry(models.Model):
 
     def __str__(self):
         return f"Naame #{self.entry_no} - {self.party} - {self.broker} - {self.amount}"
- 
+
+class Organization(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_orgs")
+    created_at = models.DateTimeField(auto_now_add=True)
+    def __str__(self): return self.name
+
+class Membership(models.Model):
+    class Role(models.TextChoices):
+        OWNER = "OWNER", _("Owner")
+        MANAGER = "MANAGER", _("Manager")
+        EMPLOYEE = "EMPLOYEE", _("Employee")
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("org", "user")
+
+    def __str__(self): return f"{self.user} @ {self.org} ({self.role})"
+
+# Inherit this in your business models to auto-get org + created_by
+class OrgScopedModel(models.Model):
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    class Meta:
+        abstract = True 

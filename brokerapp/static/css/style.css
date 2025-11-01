@@ -127,3 +127,16 @@ body.login-page .login-card {
 .overall-totals-vertical .total-line span { font-weight:500; color:#0b3d91; }
 .overall-totals-vertical .total-line strong { min-width:80px; text-align:right; font-weight:600; color:#000; }
 .overall-totals-vertical .total-line.border-top { border-top:2px solid #0b3d91 !important; border-bottom:none; font-weight:700; color:#0b3d91; }
+
+
+/* hide number arrows in all browsers */
+input[type="number"] {
+  -moz-appearance: textfield;   /* Firefox */
+  appearance: textfield;        /* Standard */
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;     /* Chrome/Safari */
+  appearance: none;             /* Standard (satisfy linter) */
+  margin: 0;
+}

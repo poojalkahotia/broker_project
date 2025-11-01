@@ -21,7 +21,7 @@ from django.http import HttpResponse
 from django.db.models import ProtectedError
 from io import BytesIO
 from fpdf import FPDF
-
+from .utils import require_org
 class PDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 14)
@@ -82,16 +82,18 @@ def to_decimal(val, default=Decimal('0')):
 # -----------------------
 # Views
 # -----------------------
+@require_org
 def sale_form(request, invno=None):
     """
-    Render sale form. If invno provided, load sale and its details and pass sale_items_json for the client UI.
+    Render sale form. If invno provided, load sale and its details (scoped to current org).
     """
     sale = None
     sale_items_json = "[]"
     today_date = date.today().strftime("%Y-%m-%d")
 
     if invno:
-        sale = get_object_or_404(SaleMaster, invno=invno)
+        # sale must belong to current org
+        sale = get_object_or_404(SaleMaster, invno=invno, org=request.current_org)
         details = SaleDetails.objects.filter(salemaster=sale)
         items_data = []
         for d in details:
@@ -114,32 +116,33 @@ def sale_form(request, invno=None):
             })
         sale_items_json = json.dumps(items_data)
 
-    next_invno = SaleMaster.objects.aggregate(Max("invno"))['invno__max']
+    # next invoice number — per ORG
+    next_invno = SaleMaster.objects.filter(org=request.current_org).aggregate(Max("invno"))['invno__max']
     next_invno = (next_invno + 1) if next_invno else 1
 
     context = {
         "sale": sale,
-        "sale_items_json": sale_items_json,  # for JS
+        "sale_items_json": sale_items_json,
         "next_invno": next_invno,
         "today_date": today_date,
-        "items": HeadItem.objects.all().order_by('item_name'),
-        "parties": HeadParty.objects.all().order_by('partyname'),
-        "brokers": Broker.objects.all().order_by('brokername'),
+        # only current org choices
+        "items": HeadItem.objects.filter(org=request.current_org).order_by('item_name'),
+        "parties": HeadParty.objects.filter(org=request.current_org).order_by('partyname'),
+        "brokers": Broker.objects.filter(org=request.current_org).order_by('brokername'),
     }
     return render(request, "brokerapp/sale.html", context)
 
 # ===================== SAVE SALE =====================
+@require_org
 @transaction.atomic
 def save_sale(request):
     """
-    Save a new SaleMaster and its SaleDetails.
-    Expects 'items_json' hidden input (JSON array) in POST containing line items.
+    Save a new SaleMaster and its SaleDetails — scoped to current org.
     """
     if request.method != "POST":
         return redirect('sale_form_new')
 
     try:
-        # ---------- Header fields ----------
         invdate_str = request.POST.get("invdate")
         invdate = datetime.strptime(invdate_str, "%Y-%m-%d").date() if invdate_str else date.today()
         awakno = request.POST.get("awakno", "").strip()
@@ -148,20 +151,16 @@ def save_sale(request):
         broker_pk = request.POST.get("broker")
         vehicleno = request.POST.get("vehicleno", "").strip()
 
-        # ---------- Items JSON ----------
         items_json = request.POST.get("items_json") or "[]"
         items = json.loads(items_json)
-
         if not items:
             messages.error(request, "Add at least one item before saving.")
             return redirect("sale_form_new")
 
-        # ---------- Totals ----------
         total_amt = Decimal('0')
         for it in items:
             total_amt += to_decimal(it.get("amt", 0))
 
-        # ---------- Summary ----------
         batavpercent = to_decimal(request.POST.get("batavpercent", 0))
         batavamt = (total_amt * batavpercent / Decimal('100')).quantize(Decimal('0.01'))
 
@@ -174,12 +173,14 @@ def save_sale(request):
         total = (total_amt - batavamt - dramt - qi - other).quantize(Decimal('0.01'))
         netamt = (total - advance).quantize(Decimal('0.01'))
 
-        # ---------- Resolve FKs ----------
-        party = get_object_or_404(HeadParty, pk=party_pk)
-        broker = get_object_or_404(Broker, pk=broker_pk)
+        # Resolve FKs inside same org
+        party = get_object_or_404(HeadParty, pk=party_pk, org=request.current_org)
+        broker = get_object_or_404(Broker, pk=broker_pk, org=request.current_org)
 
-        # ---------- Create SaleMaster ----------
+        # Create SaleMaster with org + created_by
         sale = SaleMaster.objects.create(
+            org=request.current_org,
+            created_by=request.user,
             invdate=invdate,
             awakno=awakno,
             party=party,
@@ -199,10 +200,10 @@ def save_sale(request):
             remark=request.POST.get("remark", "").strip(),
         )
 
-        # ---------- Create SaleDetails ----------
+        # Create SaleDetails (items limited to same org)
         for it in items:
             item_id = it.get("item_id")
-            item_obj = get_object_or_404(HeadItem, pk=item_id)
+            item_obj = get_object_or_404(HeadItem, pk=item_id, org=request.current_org)
             SaleDetails.objects.create(
                 salemaster=sale,
                 item=item_obj,
@@ -227,19 +228,18 @@ def save_sale(request):
         messages.error(request, f"Error saving sale: {e}")
         return redirect("sale_form_new")
 
-
+@require_org
 @transaction.atomic
 def update_sale(request, invno):
     """
-    Update existing SaleMaster identified by invno. Replaces details with posted items.
+    Update existing SaleMaster identified by invno (scoped to current org).
     """
-    sale = get_object_or_404(SaleMaster, invno=invno)
+    sale = get_object_or_404(SaleMaster, invno=invno, org=request.current_org)
 
     if request.method != "POST":
         return redirect('sale_form_update', invno=invno)
 
     try:
-        # ---------- Header fields ----------
         invdate_str = request.POST.get("invdate")
         invdate = datetime.strptime(invdate_str, "%Y-%m-%d").date() if invdate_str else sale.invdate
         awakno = request.POST.get("awakno", "").strip()
@@ -248,20 +248,16 @@ def update_sale(request, invno):
         vehicleno = request.POST.get("vehicleno", "").strip()
         extra = request.POST.get("extra", "").strip()
 
-        # ---------- Line items JSON ----------
         items_json = request.POST.get("items_json") or "[]"
         items = json.loads(items_json)
-
         if not items:
             messages.error(request, "Add at least one item before saving.")
             return redirect("sale_form_update", invno=invno)
 
-        # ---------- Calculate totals ----------
         total_amt = Decimal('0')
         for it in items:
             total_amt += to_decimal(it.get("amt", 0))
 
-        # ---------- Summary ----------
         batavpercent = to_decimal(request.POST.get("batavpercent", 0))
         batavamt = (total_amt * batavpercent / Decimal('100')).quantize(Decimal('0.01'))
 
@@ -274,11 +270,11 @@ def update_sale(request, invno):
         total = (total_amt - batavamt - dramt - qi - other).quantize(Decimal('0.01'))
         netamt = (total - advance).quantize(Decimal('0.01'))
 
-        # ---------- Resolve Foreign Keys ----------
-        party = get_object_or_404(HeadParty, pk=party_pk)
-        broker = get_object_or_404(Broker, pk=broker_pk)
+        # Resolve FKs inside same org
+        party = get_object_or_404(HeadParty, pk=party_pk, org=request.current_org)
+        broker = get_object_or_404(Broker, pk=broker_pk, org=request.current_org)
 
-        # ---------- Update SaleMaster ----------
+        # Update header
         sale.invdate = invdate
         sale.awakno = awakno
         sale.party = party
@@ -298,12 +294,11 @@ def update_sale(request, invno):
         sale.remark = request.POST.get("remark", "").strip()
         sale.save()
 
-        # ---------- Replace SaleDetails ----------
+        # Replace details
         SaleDetails.objects.filter(salemaster=sale).delete()
         for it in items:
             item_id = it.get("item_id")
-            item_obj = get_object_or_404(HeadItem, pk=item_id)
-
+            item_obj = get_object_or_404(HeadItem, pk=item_id, org=request.current_org)
             SaleDetails.objects.create(
                 salemaster=sale,
                 item=item_obj,
@@ -328,21 +323,25 @@ def update_sale(request, invno):
         messages.error(request, f"Error updating sale: {e}")
         return redirect("sale_form_update", invno=invno)
 
+@require_org
 def sale_data_view(request):
-    """List of sales for viewing in a table (saledata)."""
-    sales = SaleMaster.objects.all().order_by("-invno")
+    """List of sales (scoped to current org)."""
+    sales = SaleMaster.objects.filter(org=request.current_org).order_by("-invno")
     return render(request, "brokerapp/saledata.html", {
         "sales": sales,
         "today_date": date.today(),
     })
 
 
+
+@require_org
 def delete_sale(request, invno):
-    sale = get_object_or_404(SaleMaster, invno=invno)
+    sale = get_object_or_404(SaleMaster, invno=invno, org=request.current_org)
     sale.delete()
     messages.success(request, "Sale entry deleted successfully!")
     return redirect("saledata")
 
+@require_org
 def sale_report(request):
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
@@ -355,14 +354,22 @@ def sale_report(request):
     if not end_date:
         end_date = date.today().strftime("%Y-%m-%d")
 
-    # Base queryset
-    sales = SaleMaster.objects.all()
+    # Base queryset (ORG SCOPED)
+    sales = (SaleMaster.objects
+             .filter(org=request.current_org))
+
     if start_date:
         sales = sales.filter(invdate__gte=parse_date(start_date))
     if end_date:
         sales = sales.filter(invdate__lte=parse_date(end_date))
+
+    # Broker filter: allow pk or name, but scoped to org
     if broker_id and broker_id != "all":
-        sales = sales.filter(broker__brokername=broker_id)
+        # try as primary key
+        if sales.filter(broker__pk=broker_id).exists():
+            sales = sales.filter(broker__pk=broker_id)
+        else:
+            sales = sales.filter(broker__brokername=broker_id)
 
     sales = sales.order_by("invdate")
 
@@ -421,7 +428,8 @@ def sale_report(request):
         total_netamt=Sum("netamt"),
     )
 
-    brokers = Broker.objects.all()
+    # Dropdowns also ORG SCOPED
+    brokers = Broker.objects.filter(org=request.current_org).order_by("brokername")
 
     context = {
         "report_data": report_data,
@@ -432,9 +440,9 @@ def sale_report(request):
         "selected_broker": broker_id if broker_id != "all" else None,
         "report_type": report_type,
     }
-
     return render(request, "brokerapp/sale_report.html", context)
 
+@require_org
 def bardana_report(request):
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
@@ -448,22 +456,27 @@ def bardana_report(request):
     if not end_date:
         end_date = date.today().strftime("%Y-%m-%d")
 
-    # Base queryset
+    # Base queryset (ORG SCOPED via salemaster__org)
     details = (
         SaleDetails.objects
         .select_related('salemaster', 'item', 'salemaster__party', 'salemaster__broker')
         .filter(
+            salemaster__org=request.current_org,
             salemaster__invdate__gte=parse_date(start_date),
             salemaster__invdate__lte=parse_date(end_date)
         )
         .order_by('salemaster__invdate')
     )
 
-    # Party / Broker filter
+    # Party / Broker filters (within org)
     if party_id and party_id != "all":
         details = details.filter(salemaster__party__pk=party_id)
     if broker_id and broker_id != "all":
-        details = details.filter(salemaster__broker__pk=broker_id)
+        # allow pk or name
+        if details.filter(salemaster__broker__pk=broker_id).exists():
+            details = details.filter(salemaster__broker__pk=broker_id)
+        else:
+            details = details.filter(salemaster__broker__brokername=broker_id)
 
     # Prepare grouped data
     report_data = []
@@ -498,15 +511,15 @@ def bardana_report(request):
             group_details = details.filter(salemaster__broker__brokername=g)
             totals = group_details.aggregate(total_bn=Sum('bn'), total_bo=Sum('bo'))
             report_data.append({
-                "group": g,
+                "group": g or "No Broker",
                 "items": group_details,
                 "total_bn": totals["total_bn"] or 0,
                 "total_bo": totals["total_bo"] or 0,
             })
 
-    # Fetch dropdown lists
-    parties = HeadParty.objects.all()
-    brokers = Broker.objects.all()
+    # ORG-scoped dropdown lists
+    parties = HeadParty.objects.filter(org=request.current_org).order_by("partyname")
+    brokers = Broker.objects.filter(org=request.current_org).order_by("brokername")
 
     context = {
         "report_data": report_data,
@@ -518,19 +531,21 @@ def bardana_report(request):
         "selected_broker": broker_id if broker_id != "all" else None,
         "report_type": report_type,
     }
-
     return render(request, "brokerapp/bardana_report.html", context)
 
+@require_org
 def purchase_form(request, invno=None):
     """
-    Render purchase form. If invno provided, load purchase and its details and pass purchase_items_json for the client UI.
+    Render purchase form. If invno provided, load purchase + details (scoped to current org).
     """
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
     purchase = None
     purchase_items_json = "[]"
     today_date = date.today().strftime("%Y-%m-%d")
 
     if invno:
-        purchase = get_object_or_404(PurchaseMaster, invno=invno)
+        # must belong to current org
+        purchase = get_object_or_404(PurchaseMaster, invno=invno, org=request.current_org)
         details = PurchaseDetails.objects.filter(purchasemaster=purchase)
         items_data = []
         for d in details:
@@ -553,32 +568,35 @@ def purchase_form(request, invno=None):
             })
         purchase_items_json = json.dumps(items_data)
 
-    next_invno = PurchaseMaster.objects.aggregate(Max("invno"))['invno__max']
+    # next invoice number — per ORG
+    next_invno = PurchaseMaster.objects.filter(org=request.current_org).aggregate(Max("invno"))['invno__max']
     next_invno = (next_invno + 1) if next_invno else 1
 
     context = {
         "purchase": purchase,
-        "purchase_items_json": purchase_items_json,  # for JS
+        "purchase_items_json": purchase_items_json,
         "next_invno": next_invno,
         "today_date": today_date,
-        "items": HeadItem.objects.all().order_by('item_name'),
-        "parties": HeadParty.objects.all().order_by('partyname'),
-        "brokers": Broker.objects.all().order_by('brokername'),
+        # only current org choices
+        "items": HeadItem.objects.filter(org=request.current_org).order_by('item_name'),
+        "parties": HeadParty.objects.filter(org=request.current_org).order_by('partyname'),
+        "brokers": Broker.objects.filter(org=request.current_org).order_by('brokername'),
     }
     return render(request, "brokerapp/purchase.html", context)
 
 
+@require_org
 @transaction.atomic
 def save_purchase(request):
     """
-    Save a new PurchaseMaster and its PurchaseDetails.
-    Expects 'items_json' hidden input (JSON array) in POST containing line items.
+    Save a new PurchaseMaster and its PurchaseDetails — scoped to current org.
     """
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
     if request.method != "POST":
         return redirect('purchase_form_new')
 
     try:
-        # ---------- Header fields ----------
+        # Header
         invdate_str = request.POST.get("invdate")
         invdate = datetime.strptime(invdate_str, "%Y-%m-%d").date() if invdate_str else date.today()
         awakno = request.POST.get("awakno", "").strip()
@@ -587,20 +605,18 @@ def save_purchase(request):
         broker_pk = request.POST.get("broker")
         vehicleno = request.POST.get("vehicleno", "").strip()
 
-        # ---------- Items JSON ----------
+        # Items
         items_json = request.POST.get("items_json") or "[]"
         items = json.loads(items_json)
-
         if not items:
             messages.error(request, "Add at least one item before saving.")
             return redirect("purchase_form_new")
 
-        # ---------- Totals ----------
+        # Totals
         total_amt = Decimal('0')
         for it in items:
             total_amt += to_decimal(it.get("amt", 0))
 
-        # ---------- Summary ----------
         batavpercent = to_decimal(request.POST.get("batavpercent", 0))
         batavamt = (total_amt * batavpercent / Decimal('100')).quantize(Decimal('0.01'))
 
@@ -613,12 +629,14 @@ def save_purchase(request):
         total = (total_amt - batavamt - dramt - qi - other).quantize(Decimal('0.01'))
         netamt = (total - advance).quantize(Decimal('0.01'))
 
-        # ---------- Resolve FKs ----------
-        party = get_object_or_404(HeadParty, pk=party_pk)
-        broker = get_object_or_404(Broker, pk=broker_pk)
+        # Resolve FKs within same org
+        party = get_object_or_404(HeadParty, pk=party_pk, org=request.current_org)
+        broker = get_object_or_404(Broker, pk=broker_pk, org=request.current_org)
 
-        # ---------- Create PurchaseMaster ----------
+        # Create master (bind org + created_by)
         purchase = PurchaseMaster.objects.create(
+            org=request.current_org,
+            created_by=request.user,
             invdate=invdate,
             awakno=awakno,
             party=party,
@@ -638,10 +656,10 @@ def save_purchase(request):
             remark=request.POST.get("remark", "").strip(),
         )
 
-        # ---------- Create PurchaseDetails ----------
+        # Create details (items only from same org)
         for it in items:
             item_id = it.get("item_id")
-            item_obj = get_object_or_404(HeadItem, pk=item_id)
+            item_obj = get_object_or_404(HeadItem, pk=item_id, org=request.current_org)
             PurchaseDetails.objects.create(
                 purchasemaster=purchase,
                 item=item_obj,
@@ -667,18 +685,20 @@ def save_purchase(request):
         return redirect("purchase_form_new")
 
 
+@require_org
 @transaction.atomic
 def update_purchase(request, invno):
     """
-    Update existing PurchaseMaster identified by invno. Replaces details with posted items.
+    Update existing PurchaseMaster (scoped to current org).
     """
-    purchase = get_object_or_404(PurchaseMaster, invno=invno)
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
+    purchase = get_object_or_404(PurchaseMaster, invno=invno, org=request.current_org)
 
     if request.method != "POST":
         return redirect('purchase_form_update', invno=invno)
 
     try:
-        # ---------- Header fields ----------
+        # Header
         invdate_str = request.POST.get("invdate")
         invdate = datetime.strptime(invdate_str, "%Y-%m-%d").date() if invdate_str else purchase.invdate
         awakno = request.POST.get("awakno", "").strip()
@@ -687,20 +707,18 @@ def update_purchase(request, invno):
         broker_pk = request.POST.get("broker")
         vehicleno = request.POST.get("vehicleno", "").strip()
 
-        # ---------- Line items JSON ----------
+        # Items
         items_json = request.POST.get("items_json") or "[]"
         items = json.loads(items_json)
-
         if not items:
             messages.error(request, "Add at least one item before saving.")
             return redirect("purchase_form_update", invno=invno)
 
-        # ---------- Calculate totals ----------
+        # Totals
         total_amt = Decimal('0')
         for it in items:
             total_amt += to_decimal(it.get("amt", 0))
 
-        # ---------- Summary ----------
         batavpercent = to_decimal(request.POST.get("batavpercent", 0))
         batavamt = (total_amt * batavpercent / Decimal('100')).quantize(Decimal('0.01'))
 
@@ -713,11 +731,11 @@ def update_purchase(request, invno):
         total = (total_amt - batavamt - dramt - qi - other).quantize(Decimal('0.01'))
         netamt = (total - advance).quantize(Decimal('0.01'))
 
-        # ---------- Resolve Foreign Keys ----------
-        party = get_object_or_404(HeadParty, pk=party_pk)
-        broker = get_object_or_404(Broker, pk=broker_pk)
+        # Resolve FKs in same org
+        party = get_object_or_404(HeadParty, pk=party_pk, org=request.current_org)
+        broker = get_object_or_404(Broker, pk=broker_pk, org=request.current_org)
 
-        # ---------- Update PurchaseMaster ----------
+        # Update master
         purchase.invdate = invdate
         purchase.awakno = awakno
         purchase.extra = extra
@@ -737,11 +755,11 @@ def update_purchase(request, invno):
         purchase.remark = request.POST.get("remark", "").strip()
         purchase.save()
 
-        # ---------- Replace PurchaseDetails ----------
+        # Replace details
         PurchaseDetails.objects.filter(purchasemaster=purchase).delete()
         for it in items:
             item_id = it.get("item_id")
-            item_obj = get_object_or_404(HeadItem, pk=item_id)
+            item_obj = get_object_or_404(HeadItem, pk=item_id, org=request.current_org)
             PurchaseDetails.objects.create(
                 purchasemaster=purchase,
                 item=item_obj,
@@ -766,17 +784,22 @@ def update_purchase(request, invno):
         messages.error(request, f"Error updating purchase: {e}")
         return redirect("purchase_form_update", invno=invno)
 
+@require_org
 def purchase_data_view(request):
-    """List of purchases for viewing in a table (purchasedata)."""
-    purchases = PurchaseMaster.objects.all().order_by("-invno")
+    """List of purchases (scoped to current org)."""
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
+    purchases = PurchaseMaster.objects.filter(org=request.current_org).order_by("-invno")
     return render(request, "brokerapp/purchasedata.html", {
         "purchases": purchases,
         "today_date": date.today(),
     })
 
 
+
+@require_org
 def delete_purchase(request, invno):
-    purchase = get_object_or_404(PurchaseMaster, invno=invno)
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
+    purchase = get_object_or_404(PurchaseMaster, invno=invno, org=request.current_org)
     purchase.delete()
     messages.success(request, "Purchase entry deleted successfully!")
     return redirect("purchasedata")
@@ -874,30 +897,46 @@ def purchase_report(request):
     return render(request, "brokerapp/purchase_report.html", context)
 
 
+@require_org
 def party_view(request, pk=None):
+    # Only fetch inside current org
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
     instance = None
     if pk:
-        instance = get_object_or_404(HeadParty, pk=pk)
+        instance = get_object_or_404(HeadParty, pk=pk, org=request.current_org)
 
     if request.method == 'POST':
-        form = PartyForm(request.POST, instance=instance)
+        # ⬇️ current_org पास करें
+        form = PartyForm(request.POST, instance=instance, current_org=request.current_org)
+
         if form.is_valid():
-            form.save()
+            obj = form.save(commit=False)
+
+            # Ensure party always belongs to selected org
+            obj.org = request.current_org
+            obj.save()
+
             if pk:
                 messages.success(request, '✅ Party updated successfully!')
             else:
                 messages.success(request, '✅ Party added successfully!')
-            return redirect('party')  # back to form list
-    else:
-        form = PartyForm(instance=instance)
 
-    parties = HeadParty.objects.all()
+            return redirect('party')
+
+    else:
+        # ⬇️ current_org पास करें
+        form = PartyForm(instance=instance, current_org=request.current_org)
+
+    # Show only current org parties
+    parties = HeadParty.objects.filter(org=request.current_org)
+
     return render(request, 'brokerapp/party.html', {
         'form': form,
         'parties': parties,
         'editing': pk is not None,
         'editing_id': pk
     })
+
 
 
 def party_delete(request, pk):
@@ -914,31 +953,39 @@ def party_delete(request, pk):
         )
     return redirect('party')
 
+@require_org
 def broker_view(request, pk=None):
-    instance = None
-    if pk:
-        instance = get_object_or_404(Broker, pk=pk)
+    # current_org available check
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
+
+    # Fetch only within current org
+    instance = get_object_or_404(Broker, pk=pk, org=request.current_org) if pk else None
 
     if request.method == 'POST':
-        form = BrokerForm(request.POST, instance=instance)
+        # current_org फ़ॉर्म को पास करें
+        form = BrokerForm(request.POST, instance=instance, current_org=request.current_org)
         if form.is_valid():
-            form.save()
+            obj = form.save(commit=False)
+            obj.org = request.current_org        # bind to current org
+            obj.save()
             if pk:
                 messages.success(request, '✅ Broker updated successfully!')
             else:
                 messages.success(request, '✅ Broker added successfully!')
-            return redirect('broker')  # back to form list
+            return redirect('broker')
+        else:
+            messages.error(request, f"❌ Could not save broker:\n{form.errors.as_text()}")
     else:
-        form = BrokerForm(instance=instance)
+        form = BrokerForm(instance=instance, current_org=request.current_org)
 
-    brokers = Broker.objects.all()
+    # List only current org’s brokers
+    brokers = Broker.objects.filter(org=request.current_org)
     return render(request, 'brokerapp/broker.html', {
         'form': form,
         'brokers': brokers,
         'editing': pk is not None,
         'editing_id': pk
     })
-
 
 # Delete Broker
 def broker_delete(request, pk):
@@ -962,62 +1009,36 @@ def broker_delete(request, pk):
 def dashboard(request):
     return render(request, 'brokerapp/dashboard.html')
 
-def item_view(request):
-    selected_item = None
-    items = HeadItem.objects.all()
-    form = ItemForm()
+@require_org
+def item_view(request, pk=None):
+    assert getattr(request, "current_org", None) is not None, "current_org missing"
+
+    instance = get_object_or_404(HeadItem, pk=pk, org=request.current_org) if pk else None
 
     if request.method == 'POST':
-        action = request.POST.get('action')
-        item_name = request.POST.get('item_name', '').strip()
-        item_pk = request.POST.get('item_pk', '').strip()  # string PK for your model
-
-        # Load instance only if explicit pk provided (user clicked row)
-        if item_pk:
-            try:
-                selected_item = HeadItem.objects.get(pk=item_pk)
-            except HeadItem.DoesNotExist:
-                selected_item = None
-        else:
-            selected_item = None
-
-        if action == 'save':
-            form = ItemForm(request.POST, instance=selected_item)
-
-            if form.is_valid():
-                dup_qs = HeadItem.objects.filter(item_name__iexact=form.cleaned_data['item_name'])
-                if selected_item:
-                    dup_qs = dup_qs.exclude(pk=selected_item.pk)
-
-                if dup_qs.exists():
-                    form.add_error('item_name', "⚠️ This item already exists.")
-                else:
-                    form.save()
-                    messages.success(request, "✅ Item saved successfully!")
-                    return redirect('item')
-            else:
-                messages.error(request, "⚠️ Please correct the errors below.")
-
-        elif action == 'delete':
-            # Delete only if selected_item provided (explicit selection)
-            if item_pk and selected_item:
-                item_name_for_msg = selected_item.item_name
-                try:
-                    selected_item.delete()
-                    messages.success(request, f"🗑️ Item '{item_name_for_msg}' deleted successfully!")
-                except ProtectedError:
-                    # Related protected records exist (sale/purchase etc.)
-                    messages.error(
-                        request,
-                        f"⚠️ Cannot delete '{item_name_for_msg}' — it is linked to existing sales/purchases."
-                    )
-            else:
-                messages.warning(request, "⚠️ Select an item (click the table row) before trying to delete.")
+        
+        form = ItemForm(request.POST, instance=instance, current_org=request.current_org)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.org = request.current_org
+            obj.save()
+            
+            messages.success(request, '✅ Item updated successfully!' if pk else '✅ Item added successfully!')
             return redirect('item')
+        else:
+            messages.error(request, f"❌ Could not save item:\n{form.errors.as_text()}")
+    else:
+        form = ItemForm(instance=instance)
+        items = HeadItem.objects.all()
+        form = ItemForm(instance=instance, current_org=request.current_org)
+    items = HeadItem.objects.filter(org=request.current_org)
 
     return render(request, 'brokerapp/item.html', {
         'form': form,
         'items': items,
+       # ... आपकी बाकी context वैसी ही रहे
+       'editing': pk is not None,
+       'editing_id': pk
     })
 
 
@@ -1025,9 +1046,10 @@ def item_view(request):
 
 
 @require_GET
+@require_org
 def daily_page_view(request):
     """
-    Show daily page for selected date (via ?date=YYYY-MM-DD).
+    Show daily page for selected date (via ?date=YYYY-MM-DD) scoped to current org.
     If no date provided, default to today.
     """
     date_str = request.GET.get('date', '').strip()
@@ -1039,13 +1061,16 @@ def daily_page_view(request):
     else:
         selected_date = timezone.localdate()
 
-    parties = HeadParty.objects.all().order_by('partyname')
-    brokers = Broker.objects.all().order_by('brokername')
+    # Only current org data
+    parties = HeadParty.objects.filter(org=request.current_org).order_by('partyname')
+    brokers = Broker.objects.filter(org=request.current_org).order_by('brokername')
 
-    # fetch DailyPage for the selected date
-    daily_page = DailyPage.objects.filter(date=selected_date).first()
+    # DailyPage for current org + selected date
+    daily_page = DailyPage.objects.filter(
+        org=request.current_org,
+        date=selected_date
+    ).first()
 
-    # Safely serialize related entries for display
     def serialize_entry(e):
         broker_name = getattr(e.broker, 'brokername', '') if getattr(e, 'broker', None) else ''
         party_name = getattr(e.party, 'partyname', '') if getattr(e, 'party', None) else ''
@@ -1064,7 +1089,6 @@ def daily_page_view(request):
         jama_entries = [serialize_entry(j) for j in daily_page.jama_entries.all()]
         naame_entries = [serialize_entry(n) for n in daily_page.naame_entries.all()]
 
-    # Show "No entry on that day" message if no data
     no_entries = not (jama_entries or naame_entries)
 
     context = {
@@ -1078,15 +1102,15 @@ def daily_page_view(request):
     return render(request, 'brokerapp/daily_page.html', context)
 
 @require_GET
+@require_org
 def daily_page_show(request):
     """
     JSON endpoint: ?date=YYYY-MM-DD (optional; if missing -> today)
     Response: { "date": "...", "jama": [...], "naame": [...] }
-    Each entry contains: entry_no, party_name, broker_name, amount, remark, created_at
     """
     d = request.GET.get('date', '').strip()
 
-    # default to today if missing
+    # default to today if missing or invalid
     if not d:
         date_obj = timezone.localdate()
     else:
@@ -1095,7 +1119,8 @@ def daily_page_show(request):
         except ValueError:
             return JsonResponse({'error': 'invalid date format, expected YYYY-MM-DD'}, status=400)
 
-    daily_page = DailyPage.objects.filter(date=date_obj).first()
+    # ⬇️ scope to current org
+    daily_page = DailyPage.objects.filter(org=request.current_org, date=date_obj).first()
 
     def serialize_entry(entry):
         broker_name = getattr(entry.broker, 'brokername', '') if getattr(entry, 'broker', None) else ''
@@ -1116,7 +1141,6 @@ def daily_page_show(request):
         jama = [serialize_entry(j) for j in daily_page.jama_entries.all()]
         naame = [serialize_entry(n) for n in daily_page.naame_entries.all()]
 
-    # If no data for selected date
     if not jama and not naame:
         return JsonResponse({
             'date': date_obj.strftime('%Y-%m-%d'),
@@ -1132,45 +1156,37 @@ def daily_page_show(request):
     })
 
 @require_POST
+@require_org
 def daily_page_jama_add(request):
-    # expects form fields: date, party (id), broker (id), amount, remark
-    date = request.POST.get('date')
+    # expects: date, party (pk), broker (pk), amount, remark (optional)
+    date_str = request.POST.get('date')
     party_id = request.POST.get('party')
     broker_id = request.POST.get('broker')
     amount = request.POST.get('amount')
-    remark = request.POST.get('remark', '')  # remark blank ho sakta hai
+    remark = (request.POST.get('remark') or '').strip()
 
-    # Basic validation
-    if not (date and party_id and broker_id and amount):
+    if not (date_str and party_id and broker_id and amount):
         return JsonResponse({'error': 'Missing fields'}, status=400)
 
     try:
-        date_obj = timezone.datetime.strptime(date, '%Y-%m-%d').date()
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         amt = float(amount)
     except Exception:
         return JsonResponse({'error': 'Invalid input'}, status=400)
 
-    # Fetch Party
-    try:
-        party = HeadParty.objects.get(pk=party_id)
-    except HeadParty.DoesNotExist:
-        return JsonResponse({'error': 'Party not found'}, status=404)
+    # ⬇️ Party/Broker must belong to current org
+    party = get_object_or_404(HeadParty, pk=party_id, org=request.current_org)
+    broker = get_object_or_404(Broker, pk=broker_id, org=request.current_org)
 
-    # Fetch Broker
-    try:
-        broker = Broker.objects.get(pk=broker_id)
-    except Broker.DoesNotExist:
-        return JsonResponse({'error': 'Broker not found'}, status=404)
-
-    # Create or update DailyPage and add entry
     with transaction.atomic():
-        daily_page, _ = DailyPage.objects.get_or_create(date=date_obj)
+        # ⬇️ DailyPage is per (org, date)
+        daily_page, _ = DailyPage.objects.get_or_create(org=request.current_org, date=date_obj)
         entry = JamaEntry.objects.create(
             daily_page=daily_page,
             party=party,
             broker=broker,
             amount=amt,
-            remark=remark.strip() if remark else ""  # optional remark safe
+            remark=remark
         )
 
     data = {
@@ -1184,45 +1200,36 @@ def daily_page_jama_add(request):
 
 
 @require_POST
+@require_org
 def daily_page_naame_add(request):
-    # expects form fields: date, party (id), broker (id), amount, remark
-    date = request.POST.get('date')
+    # expects: date, party (pk), broker (pk), amount, remark (optional)
+    date_str = request.POST.get('date')
     party_id = request.POST.get('party')
     broker_id = request.POST.get('broker')
     amount = request.POST.get('amount')
-    remark = request.POST.get('remark', '')  # remark optional
+    remark = (request.POST.get('remark') or '').strip()
 
-    # Basic validation
-    if not (date and party_id and broker_id and amount):
+    if not (date_str and party_id and broker_id and amount):
         return JsonResponse({'error': 'Missing fields'}, status=400)
 
     try:
-        date_obj = timezone.datetime.strptime(date, '%Y-%m-%d').date()
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         amt = float(amount)
     except Exception:
         return JsonResponse({'error': 'Invalid input'}, status=400)
 
-    # Fetch Party
-    try:
-        party = HeadParty.objects.get(pk=party_id)
-    except HeadParty.DoesNotExist:
-        return JsonResponse({'error': 'Party not found'}, status=404)
+    # ⬇️ scoped lookups
+    party = get_object_or_404(HeadParty, pk=party_id, org=request.current_org)
+    broker = get_object_or_404(Broker, pk=broker_id, org=request.current_org)
 
-    # Fetch Broker
-    try:
-        broker = Broker.objects.get(pk=broker_id)
-    except Broker.DoesNotExist:
-        return JsonResponse({'error': 'Broker not found'}, status=404)
-
-    # Create or update DailyPage and add entry
     with transaction.atomic():
-        daily_page, _ = DailyPage.objects.get_or_create(date=date_obj)
+        daily_page, _ = DailyPage.objects.get_or_create(org=request.current_org, date=date_obj)
         entry = NaameEntry.objects.create(
             daily_page=daily_page,
             party=party,
             broker=broker,
             amount=amt,
-            remark=remark.strip() if remark else ""  # optional remark safe
+            remark=remark
         )
 
     data = {
@@ -1235,14 +1242,17 @@ def daily_page_naame_add(request):
     return JsonResponse({'success': True, 'entry': data})
 
 @require_POST
+@require_org
 def daily_page_jama_delete(request, entry_no):
-    entry = get_object_or_404(JamaEntry, entry_no=entry_no)
+    entry = get_object_or_404(JamaEntry, entry_no=entry_no, daily_page__org=request.current_org)
     entry.delete()
     return JsonResponse({'success': True, 'entry_no': entry_no})
 
+
 @require_POST
+@require_org
 def daily_page_naame_delete(request, entry_no):
-    entry = get_object_or_404(NaameEntry, entry_no=entry_no)
+    entry = get_object_or_404(NaameEntry, entry_no=entry_no, daily_page__org=request.current_org)
     entry.delete()
     return JsonResponse({'success': True, 'entry_no': entry_no})
 

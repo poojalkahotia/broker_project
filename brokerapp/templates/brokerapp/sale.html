@@ -351,7 +351,7 @@ function computeBoraParts(){
     const bnwt = getFloat('bnwt'); 
     const bo = getFloat('bo'); 
     const bowt = getFloat('bowt'); 
-    const totalBora = (bn * bnwt) + (bo * bowt); 
+    const totalBora = (bn * bnwt*.01) + (bo * bowt*.01); 
     return { totalBora }; 
 }
 
@@ -369,14 +369,12 @@ function computeQtyAndAmountAndUpdateUI(){
     // Qty calculation:
     //  - prefer totalBora when provided from BN/BO inputs
     //  - fallback to difference weight (partywt - millwt) if totalBora == 0
-    let qty = Number(totalBora) || 0;
-    if (!qty) {
-        // If totalBora is zero but party/mill weights are present, use their difference
-        const diffForQty = Math.max(0, diff);
-        qty = diffForQty;
-    }
+     // Qty = min(partywt, millwt) - total bora weight; never below 0
+    const boraWeight = Number(totalBora) || 0;                 // BN*BNWt + BO*BOWt
+    const minWt = Math.min(Number(partywt) || 0, Number(millwt) || 0);
+    const qty = Math.max(0, minWt - boraWeight);
     setVal('qty', qty);
-
+    
     // Amount calculation: keep existing 0.01 factor (project-specific).
     // Only compute when there is a positive qty and a rate (prevents NaN)
     let amount = 0;

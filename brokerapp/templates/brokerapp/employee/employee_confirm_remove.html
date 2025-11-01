@@ -1,0 +1,11 @@
+{% extends "brokerapp/base.html" %}
+{% block content %}
+<div class="container py-3">
+  <h5 class="text-danger">Remove Employee</h5>
+  <p>Remove <strong>{{ member.user.username }}</strong> from <strong>{{ CURRENT_ORG.name }}</strong>?</p>
+  <form method="post" class="mt-2">{% csrf_token %}
+    <button class="btn btn-danger">Yes, remove</button>
+    <a href="{% url 'employee_list' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+  </form>
+</div>
+{% endblock %}

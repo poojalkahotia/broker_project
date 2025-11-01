@@ -1,11 +1,14 @@
 from django import forms
 from .models import HeadParty, Broker, HeadItem, SaleMaster, SaleDetails, PurchaseMaster, PurchaseDetails
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
+from .models import Organization, Membership
 
 class PartyForm(forms.ModelForm):
     class Meta:
         model = HeadParty
-        fields = '__all__'
+        # ⬇️ org यूज़र से नहीं लेना; view सेट करेगा
+        exclude = ['org']
         widgets = {
             'partyname': forms.TextInput(attrs={'class': 'form-control'}),
             'add1': forms.TextInput(attrs={'class': 'form-control'}),
@@ -21,22 +24,25 @@ class PartyForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # ⬇️ view से आएगा; validation में काम आएगा
+        self.current_org = kwargs.pop('current_org', None)
         super(PartyForm, self).__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].label = field.capitalize()
 
-        # 👇 Disable 'partyname' if it's edit mode (instance exists)
+        # Edit mode में partyname readonly
         if self.instance and self.instance.pk:
             self.fields['partyname'].widget.attrs['readonly'] = True
 
-
-    # ✅ Duplicate name validation
+    # ✅ Duplicate name validation (per-org)
     def clean_partyname(self):
         name = self.cleaned_data.get('partyname')
         if not name:
             return name
 
         qs = HeadParty.objects.filter(partyname__iexact=name)
+        if self.current_org:
+            qs = qs.filter(org=self.current_org)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
 
@@ -47,7 +53,8 @@ class PartyForm(forms.ModelForm):
 class BrokerForm(forms.ModelForm):
     class Meta:
         model = Broker
-        fields = '__all__'
+        # org यूज़र से नहीं लेंगे; view सेट करेगा
+        exclude = ['org']
         widgets = {
             'brokername': forms.TextInput(attrs={'class': 'form-control'}),
             'mobileno': forms.TextInput(attrs={'class': 'form-control'}),
@@ -58,20 +65,28 @@ class BrokerForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # view से आएगा; duplicate check में काम आएगा
+        self.current_org = kwargs.pop('current_org', None)
         super(BrokerForm, self).__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].label = field.capitalize()
 
-        # Disable brokername when editing
+        # Edit mode: brokername lock
         if self.instance and self.instance.pk:
             self.fields['brokername'].disabled = True
 
-    # ✅ Validation for duplicate broker name
+    # ✅ Duplicate broker per-org
     def clean_brokername(self):
         brokername = self.cleaned_data.get('brokername')
-        if not self.instance.pk:  # Only when adding new broker
-            if Broker.objects.filter(brokername__iexact=brokername).exists():
-                raise ValidationError("⚠️ This broker already exists.")
+        if not brokername:
+            return brokername
+        qs = Broker.objects.filter(brokername__iexact=brokername)
+        if self.current_org:
+            qs = qs.filter(org=self.current_org)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError("⚠️ This broker already exists.")
         return brokername
 
 class ItemForm(forms.ModelForm):
@@ -82,21 +97,25 @@ class ItemForm(forms.ModelForm):
             'item_name': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        # view से current_org आएगा; validation में काम आएगा
+        self.current_org = kwargs.pop('current_org', None)
+        super().__init__(*args, **kwargs)
+        self.fields['item_name'].label = "Item Name"
+
     def clean_item_name(self):
         name = self.cleaned_data.get('item_name')
-
-        # Skip if empty
         if not name:
             return name
 
-        # If adding new item, check duplicates
-        if not self.instance.pk and HeadItem.objects.filter(item_name__iexact=name).exists():
-            raise ValidationError("⚠️ This item already exists.")
+        qs = HeadItem.objects.filter(item_name__iexact=name)
+        if self.current_org:
+            qs = qs.filter(org=self.current_org)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
 
-        # If editing, check for duplicates excluding itself
-        if self.instance.pk and HeadItem.objects.filter(item_name__iexact=name).exclude(pk=self.instance.pk).exists():
+        if qs.exists():
             raise ValidationError("⚠️ This item already exists.")
-
         return name
 
 
@@ -193,15 +212,14 @@ class SaleDetailsForm(forms.ModelForm):
 # --------------------- PURCHASE MASTER FORM ---------------------
 # --------------------- PURCHASE MASTER FORM ---------------------
 class PurchaseMasterForm(forms.ModelForm):
-    # Dropdowns
+     # Dropdowns (queryset __init__ में सेट करेंगे)
     party = forms.ModelChoiceField(
-        queryset=HeadParty.objects.all().order_by('partyname'),
+        queryset=HeadParty.objects.none(),
         empty_label="Select Party",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
-
     broker = forms.ModelChoiceField(
-        queryset=Broker.objects.all().order_by('brokername'),
+        queryset=Broker.objects.none(),
         empty_label="Select Broker",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
@@ -239,11 +257,18 @@ class PurchaseMasterForm(forms.ModelForm):
         # Optional: you can calculate netamt etc. if needed
         return cleaned_data
 
+    def __init__(self, *args, **kwargs):
+        self.current_org = kwargs.pop('current_org', None)
+        super().__init__(*args, **kwargs)
+        if self.current_org:
+            self.fields['party'].queryset = HeadParty.objects.filter(org=self.current_org).order_by('partyname')
+            self.fields['broker'].queryset = Broker.objects.filter(org=self.current_org).order_by('brokername')
+
 
 # --------------------- PURCHASE DETAILS FORM ---------------------
 class PurchaseDetailsForm(forms.ModelForm):
     item = forms.ModelChoiceField(
-        queryset=HeadItem.objects.all().order_by('item_name'),
+        queryset=HeadItem.objects.none(),
         empty_label="Select Item",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
@@ -281,3 +306,38 @@ class PurchaseDetailsForm(forms.ModelForm):
         except Exception:
             pass
         return cleaned_data
+
+    def __init__(self, *args, **kwargs):
+        self.current_org = kwargs.pop('current_org', None)
+        super().__init__(*args, **kwargs)
+        if self.current_org:
+            self.fields['item'].queryset = HeadItem.objects.filter(org=self.current_org).order_by('item_name')
+            
+class OrganizationCreateForm(forms.ModelForm):
+    class Meta:
+        model = Organization
+        fields = ["name"]
+
+class OrganizationUpdateForm(forms.ModelForm):
+    class Meta:
+        model = Organization
+        fields = ["name"]
+
+
+
+class EmployeeCreateForm(forms.Form):
+    username = forms.CharField(max_length=150)
+    email = forms.EmailField(required=False)
+    password = forms.CharField(widget=forms.PasswordInput)
+    role = forms.ChoiceField(choices=Membership.Role.choices, initial=Membership.Role.EMPLOYEE)
+
+class EmployeeUpdateForm(forms.Form):
+    email = forms.EmailField(required=False)
+    role = forms.ChoiceField(choices=Membership.Role.choices)
+    new_password = forms.CharField(widget=forms.PasswordInput, required=False)  # blank = keep same
+
+class OrgSwitchForm(forms.Form):
+    org = forms.ModelChoiceField(queryset=Organization.objects.none())
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["org"].queryset = Organization.objects.filter(memberships__user=user).distinct()

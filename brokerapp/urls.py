@@ -3,6 +3,7 @@ from . import views
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.urls import path, reverse_lazy
+from . import views_org
 urlpatterns = [
     
     # Party URLs
@@ -54,6 +55,15 @@ urlpatterns = [
     path('daily-page/jama/delete/<int:entry_no>/', views.daily_page_jama_delete, name='daily_page_jama_delete'),
     path('daily-page/naame/delete/<int:entry_no>/', views.daily_page_naame_delete, name='daily_page_naame_delete'),
     path('daily-page/pdf/', views.daily_page_pdf, name='daily_page_pdf'),
+    
+    #org
+    path("org/new/", views_org.org_create, name="org_create"),
+    path("org/switch/", views_org.org_switch, name="org_switch"),
+    path("org/edit/", views_org.org_edit, name="org_edit"),
+    path("employees/add/", views_org.employee_add, name="employee_add"),
+    path("employees/", views_org.employee_list, name="employee_list"),
+    path("employees/<int:user_id>/edit/", views_org.employee_edit, name="employee_edit"),
+    path("employees/<int:user_id>/remove/", views_org.employee_remove, name="employee_remove"),
 
 ]
 

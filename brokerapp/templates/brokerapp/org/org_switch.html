@@ -1,0 +1,9 @@
+{% extends "brokerapp/base.html" %}
+{% block content %}
+<div class="container py-3">
+  <h5 class="text-primary">Switch Organization</h5>
+  <form method="post" class="card p-3">{% csrf_token %}{{ form.as_p }}
+    <button class="btn btn-primary">Switch</button>
+  </form>
+</div>
+{% endblock %}
