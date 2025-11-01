@@ -14,31 +14,31 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='broker',
             name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization',null=True, blank=True),
         ),
         migrations.AlterField(
             model_name='dailypage',
             name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization',null=True, blank=True),
         ),
         migrations.AlterField(
             model_name='headitem',
             name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization',null=True, blank=True),
         ),
         migrations.AlterField(
             model_name='headparty',
             name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization',null=True, blank=True),
         ),
         migrations.AlterField(
             model_name='purchasemaster',
             name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization',null=True, blank=True),
         ),
         migrations.AlterField(
             model_name='salemaster',
             name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='brokerapp.organization',null=True, blank=True),
         ),
     ]
