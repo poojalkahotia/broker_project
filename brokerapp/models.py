@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 # Create your models here.
 class HeadParty(models.Model):
     partyname = models.CharField(max_length=100, primary_key=True)
-    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE,null=True, blank=True)
     add1 = models.CharField(max_length=200, blank=True)
     add2 = models.CharField(max_length=200, blank=True)
     city = models.CharField(max_length=100, blank=True)
@@ -21,7 +21,7 @@ class HeadParty(models.Model):
 
 class Broker(models.Model):
     brokername = models.CharField(max_length=100, primary_key=True)
-    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE,null=True, blank=True)
     mobileno = models.CharField(max_length=15, blank=True)
     email = models.EmailField(blank=True)
     openingdebit = models.DecimalField(max_digits=10, decimal_places=2, default=0, blank=True, null=True)
@@ -33,13 +33,13 @@ class Broker(models.Model):
     
 class HeadItem(models.Model):
     item_name = models.CharField(max_length=100, primary_key=True)
-    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE,null=True, blank=True)
     def __str__(self):
         return self.item_name
     
 class SaleMaster(models.Model):
     invno = models.AutoField(primary_key=True)
-    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE,null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     invdate = models.DateField()
     awakno = models.CharField(max_length=50, blank=True, null=True)
@@ -108,7 +108,7 @@ class SaleDetails(models.Model):
        
 class PurchaseMaster(models.Model):
     invno = models.AutoField(primary_key=True)
-    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE,null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     invdate = models.DateField()
     awakno = models.CharField(max_length=50, blank=True, null=True)
@@ -170,7 +170,7 @@ class PurchaseDetails(models.Model):
 
 
 class DailyPage(models.Model):
-    org = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    org = models.ForeignKey('Organization', on_delete=models.CASCADE,null=True, blank=True)
     date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
 
