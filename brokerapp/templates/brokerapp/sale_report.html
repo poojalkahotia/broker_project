@@ -87,6 +87,46 @@
                 <td>{{ s.advance|floatformat:2 }}</td>
                 <td>{{ s.netamt|floatformat:2 }}</td>
               </tr>
+
+              <!-- Details with TBWt -->
+              <tr>
+                <td colspan="10" class="p-0">
+                  <table class="table table-bordered table-sm mb-0">
+                    <thead class="table-light">
+                      <tr class="text-center">
+                        <th style="width:18%">Item</th>
+                        <th style="width:10%">Bora</th>
+                        <th style="width:10%">TBWt</th>
+                        <th style="width:10%">Qty</th>
+                        <th style="width:10%">Rate</th>
+                        <th style="width:12%">Amount</th>
+                        <th style="width:10%">PartyWt</th>
+                        <th style="width:10%">MillWt</th>
+                        <th style="width:10%">DiffWt</th>
+                        <th style="width:10%">Lot No</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for d in s.details.all %}
+                      <tr class="text-center">
+                        <td class="text-start">{{ d.item.item_name }}</td>
+                        <td>{{ d.bora|floatformat:2 }}</td>
+                        <td>{{ d.tbwt|floatformat:2 }}</td>
+                        <td>{{ d.qty|floatformat:2 }}</td>
+                        <td>{{ d.rate|floatformat:2 }}</td>
+                        <td>{{ d.amount|floatformat:2 }}</td>
+                        <td>{{ d.partywt|floatformat:2 }}</td>
+                        <td>{{ d.millwt|floatformat:2 }}</td>
+                        <td>{{ d.diffwt|floatformat:2 }}</td>
+                        <td>{{ d.lotno }}</td>
+                      </tr>
+                      {% empty %}
+                      <tr><td colspan="10" class="text-center text-muted">No items</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
               {% endfor %}
             </tbody>
 
@@ -102,6 +142,12 @@
                 <td>{{ group.totals.total_advance|floatformat:2 }}</td>
                 <td>{{ group.totals.total_netamt|floatformat:2 }}</td>
               </tr>
+              {% if group.totals.total_tbwt %}
+              <tr>
+                <td colspan="3" class="text-end">Group TBWt:</td>
+                <td colspan="7" class="text-start">{{ group.totals.total_tbwt|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
             </tfoot>
           </table>
         </div>
@@ -111,39 +157,49 @@
     {% endif %}
 
     <!-- 🌐 OVERALL TOTALS (vertical stacked layout) -->
-  <div class="card mt-4 border-0 shadow-sm">
-    <div class="card-body bg-light overall-totals-vertical">
-      <h6 class="fw-bold text-primary mb-3">
-        <i class="fas fa-sigma"></i> Overall Totals
-      </h6>
-      <div class="totals-box">
-        <div class="total-line"><span>Total Amt:</span> <strong>{{ overall_totals.total_totalamt|floatformat:2 }}</strong></div>
-        <div class="total-line"><span>Batav Amt:</span> <strong>{{ overall_totals.total_batavamt|floatformat:2 }}</strong></div>
-        <div class="total-line"><span>DR Amt:</span> <strong>{{ overall_totals.total_dramt|floatformat:2 }}</strong></div>
-        <div class="total-line"><span>Other:</span> <strong>{{ overall_totals.total_other|floatformat:2 }}</strong></div>
-        <div class="total-line"><span>Advance:</span> <strong>{{ overall_totals.total_advance|floatformat:2 }}</strong></div>
-        <div class="total-line border-top pt-2 mt-2"><span>Net Amt:</span> <strong>{{ overall_totals.total_netamt|floatformat:2 }}</strong></div>
+    <div class="card mt-4 border-0 shadow-sm">
+      <div class="card-body bg-light overall-totals-vertical">
+        <h6 class="fw-bold text-primary mb-3">
+          <i class="fas fa-sigma"></i> Overall Totals
+        </h6>
+        <div class="totals-box">
+          <div class="total-line"><span>Total Amt:</span> <strong>{{ overall_totals.total_totalamt|floatformat:2 }}</strong></div>
+          <div class="total-line"><span>Batav Amt:</span> <strong>{{ overall_totals.total_batavamt|floatformat:2 }}</strong></div>
+          <div class="total-line"><span>DR Amt:</span> <strong>{{ overall_totals.total_dramt|floatformat:2 }}</strong></div>
+          <div class="total-line"><span>Other:</span> <strong>{{ overall_totals.total_other|floatformat:2 }}</strong></div>
+          <div class="total-line"><span>Advance:</span> <strong>{{ overall_totals.total_advance|floatformat:2 }}</strong></div>
+          {% if overall_totals.total_tbwt %}
+          <div class="total-line"><span>Total TBWt:</span> <strong>{{ overall_totals.total_tbwt|floatformat:2 }}</strong></div>
+          {% endif %}
+          <div class="total-line border-top pt-2 mt-2"><span>Net Amt:</span> <strong>{{ overall_totals.total_netamt|floatformat:2 }}</strong></div>
+        </div>
       </div>
     </div>
-  </div>
-
 
     <!-- 📤 EXPORT OPTIONS -->
-  <div class="card-footer d-flex justify-content-between align-items-center d-print-none">
-    <div>
-      <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
-        <i class="fas fa-print"></i> Print
-      </button>
-      <button class="btn btn-outline-success btn-sm" id="exportExcel">
-        <i class="fas fa-file-excel"></i> Export Excel
-      </button>
+    <div class="card-footer d-flex justify-content-between align-items-center d-print-none">
+      <div>
+        <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+          <i class="fas fa-print"></i> Print
+        </button>
+        <button class="btn btn-outline-success btn-sm" id="exportExcel">
+          <i class="fas fa-file-excel"></i> Export Excel
+        </button>
+         <!-- PDF: added id so JS can trigger it via shortcut -->
+        <a id="exportPdf" class="btn btn-outline-danger btn-sm"
+           href="{% url 'sale_report_pdf' %}?{{ request.GET.urlencode }}"
+           target="_blank" rel="noopener">
+           <i class="fas fa-file-pdf"></i> PDF
+       </a>
+          
+
+      </div>
+      <small class="text-muted">Report generated on {{ now|date:"d M Y, h:i A" }}</small>
     </div>
-    <small class="text-muted">Report generated on {{ now|date:"d M Y, h:i A" }}</small>
   </div>
-  </div>
+</div>
 
-
-<!-- ✅ JS: Export Excel -->
+<!-- ✅ JS: Export Excel (exports the first/summary table on the page) -->
 <script>
 document.getElementById("exportExcel").addEventListener("click", function () {
   let table = document.querySelector("table");
@@ -154,5 +210,40 @@ document.getElementById("exportExcel").addEventListener("click", function () {
   a.download = 'sale_report.xls';
   a.click();
 });
+// Keyboard Shortcuts (global)
+// Ctrl+Shift+E => Export Excel
+// Ctrl+Shift+P => Export PDF
+// Notes:
+// - Ignores when user is typing in an input/textarea
+// - Triggers existing buttons/links so no duplicate logic
+// ===========================
+document.addEventListener('keydown', function(e){
+  // Ignore when typing in form fields to avoid surprises
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  // Normalize key codes for reliability
+  const isCtrlShift = e.ctrlKey && e.shiftKey;
+  const key = (e.code || e.key || '').toUpperCase();
+
+  // Ctrl+Shift+E => Excel
+  if (isCtrlShift && (key === 'KEYE' || key === 'E')) {
+    const btn = document.getElementById('exportExcel');
+    if (btn) {
+      e.preventDefault();
+      btn.click();  // reuse existing Excel export
+    }
+  }
+
+  // Ctrl+Shift+P => PDF
+  if (isCtrlShift && (key === 'KEYP' || key === 'P')) {
+    const link = document.getElementById('exportPdf');
+    if (link) {
+      e.preventDefault();
+      // Open in new tab (same as clicking the PDF button)
+      link.click();
+    }
+  }
+});  
 </script>
 {% endblock %}

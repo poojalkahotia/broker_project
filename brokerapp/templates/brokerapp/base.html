@@ -15,78 +15,57 @@
     <div class="container-fluid">
         <a class="navbar-brand" href="{% url 'dashboard' %}">📊 Broker Dashboard</a>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
+                aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNavDropdown">
-            <!-- LEFT: main menus (show only when an org is selected) -->
+            <!-- LEFT: main menus -->
             <ul class="navbar-nav me-auto">
-                {% if CURRENT_ORG %}
-                    <!-- Master Menu -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Master</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'party' %}">Party</a></li>
-                            <li><a class="dropdown-item" href="{% url 'broker' %}">Broker</a></li>
-                            <li><a class="dropdown-item" href="{% url 'item' %}">Item</a></li>
-                        </ul>
-                    </li>
+                <!-- Master Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Master</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'party' %}">Party</a></li>
+                        <li><a class="dropdown-item" href="{% url 'broker' %}">Broker</a></li>
+                        <li><a class="dropdown-item" href="{% url 'item' %}">Item</a></li>
+                    </ul>
+                </li>
 
-                    <!-- Entry Menu -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Entry</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'sale_form_new' %}">Sale</a></li>
-                            <li><a class="dropdown-item" href="{% url 'purchase_form_new' %}">Purchase</a></li>
-                            <li><a class="dropdown-item" href="{% url 'saledata' %}">Sale Data</a></li>
-                            <li><a class="dropdown-item" href="{% url 'purchasedata' %}">Purchase Data</a></li>
-                        </ul>
-                    </li>
+                <!-- Entry Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Entry</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'sale_form_new' %}">Sale</a></li>
+                        <li><a class="dropdown-item" href="{% url 'purchase_form_new' %}">Purchase</a></li>
+                        <li><a class="dropdown-item" href="{% url 'saledata' %}">Sale Data</a></li>
+                        <li><a class="dropdown-item" href="{% url 'purchasedata' %}">Purchase Data</a></li>
+                    </ul>
+                </li>
 
-                    <!-- Report Menu -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Report</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'daily_page' %}">Daily Page</a></li>
-                            <li><a class="dropdown-item" href="{% url 'sale_report' %}">Sale Report</a></li>
-                            <li><a class="dropdown-item" href="{% url 'purchase_report' %}">Purchase Report</a></li>
-                            <li><a class="dropdown-item" href="{% url 'bardana_report' %}">Bardana Report</a></li>
-                        </ul>
-                    </li>
-
-                    <!-- Account Menu (placeholder) -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Account</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'employee_list' %}">Employees</a></li>
-                            <li><a class="dropdown-item" href="{% url 'employee_add' %}">Add Employee</a></li>
-                        </ul>
-                    </li>
-                {% else %}
-                    <!-- When no org selected, show a hint -->
-                    <li class="nav-item">
-                        <a class="nav-link text-warning" href="{% url 'org_switch' %}">Select Org to start</a>
-                    </li>
-                {% endif %}
+                <!-- Report Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Report</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'daily_page' %}">Daily Page</a></li>
+                        <li><a class="dropdown-item" href="{% url 'sale_report' %}">Sale Report</a></li>
+                        <li><a class="dropdown-item" href="{% url 'purchase_report' %}">Purchase Report</a></li>
+                        <li><a class="dropdown-item" href="{% url 'bardana_report' %}">Bardana Report</a></li>
+                    </ul>
+                </li>
             </ul>
 
-            <!-- RIGHT: Org controls -->
+            <!-- RIGHT: Org label (single-company mode) -->
             {% if user.is_authenticated %}
-            <ul class="navbar-nav me-3">
-                <!-- Org Switch -->
-                <li class="nav-item">
-                    <a class="nav-link text-warning fw-bold" href="{% url 'org_switch' %}">
-                        {% if CURRENT_ORG %}Org: {{ CURRENT_ORG.name }}{% else %}Select Org{% endif %}
-                    </a>
-                </li>
-                <!-- Edit Org (only when an org is selected) -->
-                {% if CURRENT_ORG %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'org_edit' %}">Edit Org</a>
-                </li>
+            <span class="navbar-text me-3 text-warning fw-semibold">
+                Org:
+                {% if request.current_org %}
+                    {{ request.current_org.orgname }}
+                {% else %}
+                    <em>Not set</em>
                 {% endif %}
-            </ul>
+            </span>
             {% endif %}
 
             <!-- RIGHT: profile / auth controls -->

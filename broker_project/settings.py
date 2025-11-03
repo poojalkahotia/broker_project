@@ -37,7 +37,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "brokerapp.middleware.CurrentOrganizationMiddleware",
+    "brokerapp.middleware.SingleOrgMiddleware",   # simple shared-company mode
 ]
 
 ROOT_URLCONF = "broker_project.urls"
@@ -114,3 +114,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# ✅ Default company name for single-org mode
+DEFAULT_ORG_NAME = os.environ.get("DEFAULT_ORG_NAME", "Rathi Trading Co.")

@@ -1,2 +1,8 @@
+# brokerapp/context_processors.py
 def current_org(request):
-    return {"CURRENT_ORG": getattr(request, "current_org", None)}
+    """
+    Expose request.current_org to templates.
+    Works with SingleOrgMiddleware which sets request.current_org
+    to Organization.objects.first() for every request.
+    """
+    return {"current_org": getattr(request, "current_org", None)}

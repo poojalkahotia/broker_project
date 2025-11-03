@@ -15,13 +15,13 @@ from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_exempt
 from num2words import num2words
 from django.utils import timezone
-from django.db.models import Sum, F, FloatField, ExpressionWrapper
+from django.db.models import Sum, Prefetch, F, FloatField, ExpressionWrapper
 from django.utils.dateparse import parse_date
 from django.http import HttpResponse
 from django.db.models import ProtectedError
 from io import BytesIO
 from fpdf import FPDF
-from .utils import require_org
+
 class PDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 14)
@@ -82,7 +82,7 @@ def to_decimal(val, default=Decimal('0')):
 # -----------------------
 # Views
 # -----------------------
-@require_org
+
 def sale_form(request, invno=None):
     """
     Render sale form. If invno provided, load sale and its details (scoped to current org).
@@ -105,6 +105,7 @@ def sale_form(request, invno=None):
                 "bnwt": float(d.bnwt),
                 "bo": float(d.bo),
                 "bowt": float(d.bowt),
+                "tbwt": float(getattr(d, "tbwt", 0)),
                 "totalbora": float(d.bn*d.bnwt + d.bo*d.bowt),
                 "qty": float(d.qty),
                 "rate": float(d.rate),
@@ -133,7 +134,7 @@ def sale_form(request, invno=None):
     return render(request, "brokerapp/sale.html", context)
 
 # ===================== SAVE SALE =====================
-@require_org
+
 @transaction.atomic
 def save_sale(request):
     """
@@ -212,6 +213,7 @@ def save_sale(request):
                 bnwt=to_decimal(it.get("bnwt", 0)),
                 bo=to_decimal(it.get("bo", 0)),
                 bowt=to_decimal(it.get("bowt", 0)),
+                tbwt=to_decimal(it.get("tbwt", 0)),
                 qty=to_decimal(it.get("qty", 0)),
                 rate=to_decimal(it.get("rate", 0)),
                 amount=to_decimal(it.get("amt", 0)),
@@ -228,7 +230,7 @@ def save_sale(request):
         messages.error(request, f"Error saving sale: {e}")
         return redirect("sale_form_new")
 
-@require_org
+
 @transaction.atomic
 def update_sale(request, invno):
     """
@@ -307,6 +309,7 @@ def update_sale(request, invno):
                 bnwt=to_decimal(it.get("bnwt", 0)),
                 bo=to_decimal(it.get("bo", 0)),
                 bowt=to_decimal(it.get("bowt", 0)),
+                tbwt=to_decimal(it.get("tbwt", 0)),
                 qty=to_decimal(it.get("qty", 0)),
                 rate=to_decimal(it.get("rate", 0)),
                 amount=to_decimal(it.get("amt", 0)),
@@ -323,7 +326,7 @@ def update_sale(request, invno):
         messages.error(request, f"Error updating sale: {e}")
         return redirect("sale_form_update", invno=invno)
 
-@require_org
+
 def sale_data_view(request):
     """List of sales (scoped to current org)."""
     sales = SaleMaster.objects.filter(org=request.current_org).order_by("-invno")
@@ -334,14 +337,16 @@ def sale_data_view(request):
 
 
 
-@require_org
+
 def delete_sale(request, invno):
     sale = get_object_or_404(SaleMaster, invno=invno, org=request.current_org)
     sale.delete()
     messages.success(request, "Sale entry deleted successfully!")
     return redirect("saledata")
 
-@require_org
+
+
+
 def sale_report(request):
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
@@ -354,9 +359,13 @@ def sale_report(request):
     if not end_date:
         end_date = date.today().strftime("%Y-%m-%d")
 
-    # Base queryset (ORG SCOPED)
-    sales = (SaleMaster.objects
-             .filter(org=request.current_org))
+    # Base queryset (ORG SCOPED) + prefetch details (with item) for the template
+    sales = (
+        SaleMaster.objects
+        .filter(org=request.current_org)
+        .select_related("broker")
+        .prefetch_related(Prefetch("details", queryset=SaleDetails.objects.select_related("item")))
+    )
 
     if start_date:
         sales = sales.filter(invdate__gte=parse_date(start_date))
@@ -389,6 +398,9 @@ def sale_report(request):
 
         for g in grouped:
             group_sales = sales.filter(invdate=g["invdate"])
+            # TBWt sum for this group (sum over details)
+            tbwt_sum = SaleDetails.objects.filter(salemaster__in=group_sales).aggregate(total_tbwt=Sum("tbwt"))["total_tbwt"] or 0
+            g["total_tbwt"] = tbwt_sum
             report_data.append({
                 "group": g["invdate"],
                 "items": group_sales,
@@ -411,13 +423,15 @@ def sale_report(request):
                 invdate=g["invdate"],
                 broker__brokername=g["broker__brokername"]
             )
+            tbwt_sum = SaleDetails.objects.filter(salemaster__in=group_sales).aggregate(total_tbwt=Sum("tbwt"))["total_tbwt"] or 0
+            g["total_tbwt"] = tbwt_sum
             report_data.append({
                 "group": f"{g['invdate']} - {g['broker__brokername'] or 'No Broker'}",
                 "items": group_sales,
                 "totals": g
             })
 
-    # Overall Totals
+    # Overall Totals (header-level) + TBWt across all details in the filtered set
     overall_totals = sales.aggregate(
         total_totalamt=Sum("totalamt"),
         total_batavamt=Sum("batavamt"),
@@ -427,6 +441,8 @@ def sale_report(request):
         total_advance=Sum("advance"),
         total_netamt=Sum("netamt"),
     )
+    overall_tbwt = SaleDetails.objects.filter(salemaster__in=sales).aggregate(total_tbwt=Sum("tbwt"))["total_tbwt"] or 0
+    overall_totals["total_tbwt"] = overall_tbwt
 
     # Dropdowns also ORG SCOPED
     brokers = Broker.objects.filter(org=request.current_org).order_by("brokername")
@@ -442,7 +458,177 @@ def sale_report(request):
     }
     return render(request, "brokerapp/sale_report.html", context)
 
-@require_org
+# ===================== PDF (FPDF) =====================
+def sale_report_pdf(request):
+    """
+    Generate Sale Report PDF (FPDF) using current filters.
+    Includes per-invoice detail rows with TBWt.
+    Numbers are right-aligned with thousand separators.
+    """
+    # --- build same filtered queryset as HTML report ---
+    start_date = request.GET.get("start_date") or date.today().strftime("%Y-%m-%d")
+    end_date = request.GET.get("end_date") or date.today().strftime("%Y-%m-%d")
+    broker_id = request.GET.get("broker")
+    report_type = request.GET.get("report_type", "date")
+
+    sales = (
+        SaleMaster.objects
+        .filter(org=request.current_org)
+        .select_related("broker")
+        .prefetch_related(Prefetch("details", queryset=SaleDetails.objects.select_related("item")))
+    )
+    if start_date:
+        sales = sales.filter(invdate__gte=parse_date(start_date))
+    if end_date:
+        sales = sales.filter(invdate__lte=parse_date(end_date))
+    if broker_id and broker_id != "all":
+        if sales.filter(broker__pk=broker_id).exists():
+            sales = sales.filter(broker__pk=broker_id)
+        else:
+            sales = sales.filter(broker__brokername=broker_id)
+    sales = sales.order_by("invdate", "invno")
+
+    # group-key helpers (just for headings)
+    if report_type == "date":
+        def group_key(s): return (s.invdate,)
+    else:
+        def group_key(s): return (s.invdate, s.broker.brokername if s.broker else "")
+
+    # --- FPDF setup ---
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Sale Report", ln=1, align="C")
+    pdf.set_font("Helvetica", "", 9)
+    hdr = f"From {start_date} To {end_date} | Generated: {timezone.now().strftime('%d-%m-%Y %I:%M %p')}"
+    pdf.cell(0, 6, hdr, ln=1, align="C")
+    pdf.ln(2)
+
+    # --------- MICRO-POLISH HELPERS ----------
+    def fmt2(v):
+        """format number with commas & 2 decimals"""
+        try:
+            return f"{float(v):,.2f}"
+        except Exception:
+            return "0.00"
+
+    def cellR(w, h, txt, **kw):
+        """right-aligned numeric cell"""
+        pdf.cell(w, h, txt, align="R", **kw)
+    # -----------------------------------------
+
+    # headers
+    def draw_invoice_header():
+        pdf.set_fill_color(230, 240, 255)
+        pdf.set_font("Helvetica", "B", 9)
+        cols = [
+            ("Inv No", 20), ("Date", 22), ("Broker", 40),
+            ("Total", 22), ("Batav", 22), ("DR", 18),
+            ("Other", 18), ("Adv", 18), ("Net", 22),
+        ]
+        for text, w in cols:
+            pdf.cell(w, 7, text, border=1, align="C", fill=True)
+        pdf.ln(7)
+        pdf.set_font("Helvetica", "", 9)
+
+    def draw_detail_header():
+        pdf.set_fill_color(245, 245, 245)
+        pdf.set_font("Helvetica", "B", 8)
+        cols = [
+            ("Item", 44), ("Bora", 16), ("TBWt", 16),
+            ("Qty", 16), ("Rate", 16), ("Amount", 22),
+            ("PWt", 16), ("MWt", 16), ("DWt", 16), ("Lot", 16),
+        ]
+        for text, w in cols:
+            pdf.cell(w, 6, text, border=1, align="C", fill=True)
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 8)
+
+    current_group = None
+    draw_invoice_header()
+
+    for s in sales:
+        key = group_key(s)
+        if current_group is None or key != current_group:
+            # group band
+            pdf.set_font("Helvetica", "B", 9)
+            if report_type == "date":
+                grp_txt = f"Group: {key[0].strftime('%d-%m-%Y')}"
+            else:
+                grp_txt = f"Group: {key[0].strftime('%d-%m-%Y')} - {key[1] or 'No Broker'}"
+            pdf.ln(2)
+            pdf.set_fill_color(235, 235, 235)
+            pdf.cell(0, 6, grp_txt, ln=1, fill=True)
+            pdf.set_font("Helvetica", "", 9)
+            current_group = key
+
+        # invoice header row: text left, numbers right
+        pdf.cell(20, 7, str(s.invno), border=1, align="C")
+        pdf.cell(22, 7, s.invdate.strftime("%d-%m-%Y"), border=1, align="C")
+        pdf.cell(40, 7, (s.broker.brokername if s.broker else "")[:20], border=1, align="L")
+        cellR(22, 7, fmt2(s.totalamt), border=1)
+        cellR(22, 7, fmt2(s.batavamt), border=1)
+        cellR(18, 7, fmt2(s.dramt), border=1)
+        cellR(18, 7, fmt2(s.other), border=1)
+        cellR(18, 7, fmt2(s.advance), border=1)
+        cellR(22, 7, fmt2(s.netamt), border=1)
+        pdf.ln(7)
+
+        # details
+        draw_detail_header()
+        for d in s.details.all():
+            pdf.cell(44, 6, (d.item.item_name or "")[:28], border=1, align="L")
+            cellR(16, 6, fmt2(d.bora), border=1)
+            cellR(16, 6, fmt2(d.tbwt), border=1)
+            cellR(16, 6, fmt2(d.qty), border=1)
+            cellR(16, 6, fmt2(d.rate), border=1)
+            cellR(22, 6, fmt2(d.amount), border=1)
+            cellR(16, 6, fmt2(d.partywt), border=1)
+            cellR(16, 6, fmt2(d.millwt), border=1)
+            cellR(16, 6, fmt2(d.diffwt), border=1)
+            pdf.cell(16, 6, (d.lotno or "")[:8], border=1, align="C")
+            pdf.ln(6)
+
+    # overall totals
+    overall = sales.aggregate(
+        total_totalamt=Sum("totalamt"),
+        total_batavamt=Sum("batavamt"),
+        total_dramt=Sum("dramt"),
+        total_other=Sum("other"),
+        total_advance=Sum("advance"),
+        total_netamt=Sum("netamt"),
+    )
+    overall_tbwt = SaleDetails.objects.filter(salemaster__in=sales).aggregate(
+        total_tbwt=Sum("tbwt")
+    )["total_tbwt"] or 0
+
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 7, "Overall Totals", ln=1)
+    pdf.set_font("Helvetica", "", 9)
+    lines = [
+        f"Total Amt: {fmt2(overall['total_totalamt'] or 0)}",
+        f"Batav Amt: {fmt2(overall['total_batavamt'] or 0)}",
+        f"DR Amt: {fmt2(overall['total_dramt'] or 0)}",
+        f"Other: {fmt2(overall['total_other'] or 0)}",
+        f"Advance: {fmt2(overall['total_advance'] or 0)}",
+        f"Total TBWt: {fmt2(overall_tbwt)}",
+        f"Net Amt: {fmt2(overall['total_netamt'] or 0)}",
+    ]
+    for line in lines:
+        pdf.cell(0, 6, line, ln=1)
+
+    # finalize (bytes -> HttpResponse)
+    pdf.alias_nb_pages()
+    filename = f"sale_report_{start_date}_{end_date}.pdf"
+    pdf_bytes = pdf.output(dest="S").encode("latin-1", "replace")
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{filename}"'
+    return resp
+
+
+
 def bardana_report(request):
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
@@ -533,7 +719,7 @@ def bardana_report(request):
     }
     return render(request, "brokerapp/bardana_report.html", context)
 
-@require_org
+
 def purchase_form(request, invno=None):
     """
     Render purchase form. If invno provided, load purchase + details (scoped to current org).
@@ -585,7 +771,7 @@ def purchase_form(request, invno=None):
     return render(request, "brokerapp/purchase.html", context)
 
 
-@require_org
+
 @transaction.atomic
 def save_purchase(request):
     """
@@ -685,7 +871,7 @@ def save_purchase(request):
         return redirect("purchase_form_new")
 
 
-@require_org
+
 @transaction.atomic
 def update_purchase(request, invno):
     """
@@ -784,7 +970,7 @@ def update_purchase(request, invno):
         messages.error(request, f"Error updating purchase: {e}")
         return redirect("purchase_form_update", invno=invno)
 
-@require_org
+
 def purchase_data_view(request):
     """List of purchases (scoped to current org)."""
     assert getattr(request, "current_org", None) is not None, "current_org missing"
@@ -796,7 +982,7 @@ def purchase_data_view(request):
 
 
 
-@require_org
+
 def delete_purchase(request, invno):
     assert getattr(request, "current_org", None) is not None, "current_org missing"
     purchase = get_object_or_404(PurchaseMaster, invno=invno, org=request.current_org)
@@ -897,7 +1083,7 @@ def purchase_report(request):
     return render(request, "brokerapp/purchase_report.html", context)
 
 
-@require_org
+
 def party_view(request, pk=None):
     # Only fetch inside current org
     assert getattr(request, "current_org", None) is not None, "current_org missing"
@@ -953,7 +1139,7 @@ def party_delete(request, pk):
         )
     return redirect('party')
 
-@require_org
+
 def broker_view(request, pk=None):
     # current_org available check
     assert getattr(request, "current_org", None) is not None, "current_org missing"
@@ -1009,7 +1195,7 @@ def broker_delete(request, pk):
 def dashboard(request):
     return render(request, 'brokerapp/dashboard.html')
 
-@require_org
+
 def item_view(request, pk=None):
     assert getattr(request, "current_org", None) is not None, "current_org missing"
 
@@ -1046,7 +1232,7 @@ def item_view(request, pk=None):
 
 
 @require_GET
-@require_org
+
 def daily_page_view(request):
     """
     Show daily page for selected date (via ?date=YYYY-MM-DD) scoped to current org.
@@ -1102,7 +1288,7 @@ def daily_page_view(request):
     return render(request, 'brokerapp/daily_page.html', context)
 
 @require_GET
-@require_org
+
 def daily_page_show(request):
     """
     JSON endpoint: ?date=YYYY-MM-DD (optional; if missing -> today)
@@ -1156,7 +1342,7 @@ def daily_page_show(request):
     })
 
 @require_POST
-@require_org
+
 def daily_page_jama_add(request):
     # expects: date, party (pk), broker (pk), amount, remark (optional)
     date_str = request.POST.get('date')
@@ -1200,7 +1386,7 @@ def daily_page_jama_add(request):
 
 
 @require_POST
-@require_org
+
 def daily_page_naame_add(request):
     # expects: date, party (pk), broker (pk), amount, remark (optional)
     date_str = request.POST.get('date')
@@ -1242,7 +1428,7 @@ def daily_page_naame_add(request):
     return JsonResponse({'success': True, 'entry': data})
 
 @require_POST
-@require_org
+
 def daily_page_jama_delete(request, entry_no):
     entry = get_object_or_404(JamaEntry, entry_no=entry_no, daily_page__org=request.current_org)
     entry.delete()
@@ -1250,7 +1436,7 @@ def daily_page_jama_delete(request, entry_no):
 
 
 @require_POST
-@require_org
+
 def daily_page_naame_delete(request, entry_no):
     entry = get_object_or_404(NaameEntry, entry_no=entry_no, daily_page__org=request.current_org)
     entry.delete()

@@ -1,17 +1,23 @@
-from .models import Membership
+# brokerapp/middleware.py
+from django.conf import settings
+from .models import Organization
 
-class CurrentOrganizationMiddleware:
+class SingleOrgMiddleware:
+    """
+    Single-company mode:
+    - Always use one shared Organization record
+    - Auto-create it if not found, using DEFAULT_ORG_NAME from settings
+    """
     def __init__(self, get_response):
         self.get_response = get_response
+
     def __call__(self, request):
-        request.current_org = None
-        if request.user.is_authenticated:
-            org_id = request.session.get("current_org_id")
-            if org_id:
-                try:
-                    request.current_org = Membership.objects.select_related("org").get(
-                        user=request.user, org_id=org_id
-                    ).org
-                except Membership.DoesNotExist:
-                    request.session.pop("current_org_id", None)
+        # Ensure default org exists
+        org, created = Organization.objects.get_or_create(
+            name=settings.DEFAULT_ORG_NAME
+        )
+
+        # Attach to request so whole app uses same org
+        request.current_org = org
+
         return self.get_response(request)

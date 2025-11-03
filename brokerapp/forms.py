@@ -2,7 +2,7 @@ from django import forms
 from .models import HeadParty, Broker, HeadItem, SaleMaster, SaleDetails, PurchaseMaster, PurchaseDetails
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
-from .models import Organization, Membership
+from .models import Organization
 
 class PartyForm(forms.ModelForm):
     class Meta:
@@ -179,7 +179,7 @@ class SaleDetailsForm(forms.ModelForm):
     class Meta:
         model = SaleDetails
         fields = [
-            'item', 'bora', 'bn', 'bnwt', 'bo', 'bowt',
+            'item', 'bora', 'bn', 'bnwt', 'bo', 'bowt','tbwt', 
             'qty', 'rate', 'amount', 'partywt', 'millwt', 'diffwt', 'lotno'
         ]
         widgets = {
@@ -188,6 +188,7 @@ class SaleDetailsForm(forms.ModelForm):
             'bnwt': forms.NumberInput(attrs={'class': 'form-control'}),
             'bo': forms.NumberInput(attrs={'class': 'form-control'}),
             'bowt': forms.NumberInput(attrs={'class': 'form-control'}),
+            'tbwt': forms.NumberInput(attrs={'class': 'form-control'}),
             'qty': forms.NumberInput(attrs={'class': 'form-control', 'oninput': 'calculateAmount()'}),
             'rate': forms.NumberInput(attrs={'class': 'form-control', 'oninput': 'calculateAmount()'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
@@ -313,31 +314,3 @@ class PurchaseDetailsForm(forms.ModelForm):
         if self.current_org:
             self.fields['item'].queryset = HeadItem.objects.filter(org=self.current_org).order_by('item_name')
             
-class OrganizationCreateForm(forms.ModelForm):
-    class Meta:
-        model = Organization
-        fields = ["name"]
-
-class OrganizationUpdateForm(forms.ModelForm):
-    class Meta:
-        model = Organization
-        fields = ["name"]
-
-
-
-class EmployeeCreateForm(forms.Form):
-    username = forms.CharField(max_length=150)
-    email = forms.EmailField(required=False)
-    password = forms.CharField(widget=forms.PasswordInput)
-    role = forms.ChoiceField(choices=Membership.Role.choices, initial=Membership.Role.EMPLOYEE)
-
-class EmployeeUpdateForm(forms.Form):
-    email = forms.EmailField(required=False)
-    role = forms.ChoiceField(choices=Membership.Role.choices)
-    new_password = forms.CharField(widget=forms.PasswordInput, required=False)  # blank = keep same
-
-class OrgSwitchForm(forms.Form):
-    org = forms.ModelChoiceField(queryset=Organization.objects.none())
-    def __init__(self, user, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["org"].queryset = Organization.objects.filter(memberships__user=user).distinct()

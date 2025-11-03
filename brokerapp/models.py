@@ -91,7 +91,8 @@ class SaleDetails(models.Model):
     bnwt = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     bo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     bowt = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-
+    # NEW: TBWt (shown before PWt in UI)
+    tbwt = models.DecimalField("TBWt", max_digits=12, decimal_places=2, default=0)
     qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -214,25 +215,17 @@ class NaameEntry(models.Model):
         return f"Naame #{self.entry_no} - {self.party} - {self.broker} - {self.amount}"
 
 class Organization(models.Model):
+
     name = models.CharField(max_length=150, unique=True)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_orgs")
+    # Owner is optional in single-company mode (handy for seeding via command)
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_orgs")
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self): return self.name
+    # Alias for older templates/code that expect .orgname
+    @property
+    def orgname(self):
+        return self.name
 
-class Membership(models.Model):
-    class Role(models.TextChoices):
-        OWNER = "OWNER", _("Owner")
-        MANAGER = "MANAGER", _("Manager")
-        EMPLOYEE = "EMPLOYEE", _("Employee")
-    org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="memberships")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ("org", "user")
-
-    def __str__(self): return f"{self.user} @ {self.org} ({self.role})"
 
 # Inherit this in your business models to auto-get org + created_by
 class OrgScopedModel(models.Model):
