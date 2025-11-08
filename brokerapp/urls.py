@@ -8,14 +8,18 @@ urlpatterns = [
     
     # Party URLs
     path('parties/', views.party_view, name='party'),
+    path('parties/', views.party_view, name='party_create'),  # create/new
+    path('parties/list/', views.party_view, name='party'),    # optional list (same view)
     path('parties/edit/<str:pk>/', views.party_view, name='party_edit'),
     path('parties/delete/<str:pk>/', views.party_delete, name='party_delete'),
     
-    path('broker/', views.broker_view, name='broker'),
+    path('broker/', views.broker_view, name='broker'), 
+    path('broker/', views.broker_view, name='broker_create'),
     path('broker/edit/<str:pk>/', views.broker_view, name='broker_edit'),
     path('broker/delete/<str:pk>/', views.broker_delete, name='broker_delete'),
     
-    path('items/', views.item_view, name='item'),
+    path('items/', views.item_view, name='item'),  
+    path('items/create/', views.item_view, name='item_create'),
     
     # Authentication URLs
     path("login/", auth_views.LoginView.as_view(template_name="auth/login.html"), name="login"),
@@ -58,7 +62,8 @@ urlpatterns = [
     path('daily-page/naame/delete/<int:entry_no>/', views.daily_page_naame_delete, name='daily_page_naame_delete'),
     path('daily-page/pdf/', views.daily_page_pdf, name='daily_page_pdf'),
     
-    
+    # Accounts
+    path("account/all-party-balance/", views.AllPartyBalanceView.as_view(), name="all_party_balance"),
 ]
 
 

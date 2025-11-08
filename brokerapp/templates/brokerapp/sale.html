@@ -64,7 +64,12 @@
             <!-- Party -->
             <div class="col-md-4">
                 <div class="d-flex align-items-center mb-2">
-                    <label class="form-label me-2 mb-0" style="width: 80px;">Party:</label>
+                    <label class="form-label me-2 mb-0" style="width: 80px;">
+                        <a href="{% url 'party_create' %}?next=sale" title="Open Party (return to Sale after save)" style="text-decoration:none; color:#0b3d91;">
+                            Party <i class="bi bi-plus-circle"></i>
+                        </a>:
+                    </label>
+
                     <select name="party" id="party"
                             class="form-control form-control-sm flex-grow-1"
                             onchange="fillPartyDetails()" required>
@@ -80,10 +85,15 @@
                 </div>
             </div>
 
-            <!-- Broker -->
+            <!-- Broker (same flow as Party: returns to Sale after save) -->
             <div class="col-md-4">
                 <div class="d-flex align-items-center mb-2">
-                    <label class="form-label me-2 mb-0" style="width: 80px;">Broker:</label>
+                    <label class="form-label me-2 mb-0" style="width: 80px;">
+                        <a href="{% url 'broker_create' %}?next=sale" title="Open Broker (return to Sale after save)" style="text-decoration:none; color:#0b3d91;">
+                            Broker <i class="bi bi-plus-circle"></i>
+                        </a>:
+                    </label>
+
                     <select name="broker" id="broker"
                             class="form-control form-control-sm flex-grow-1" required>
                         <option value="">Select Broker</option>
@@ -95,6 +105,7 @@
                     </select>
                 </div>
             </div>
+
 
             <!-- Extra -->
             <div class="col-md-4">
@@ -110,9 +121,14 @@
 <h2 class="mt-4"></h2>
 <div class="row g-1 align-items-end" style="flex-wrap: nowrap;">
 
-    <!-- Item -->
     <div class="col-md-2">
-        <label class="form-label mb-1">Item</label>
+        <label class="form-label mb-1">
+            <a href="{% url 'item_create' %}?next=sale"
+            title="Open Item (return to Sale after save)"
+            style="text-decoration:none; color:#0b3d91;">
+                Item <i class="bi bi-plus-circle"></i>
+            </a>
+        </label>
         <select id="itemSelect" class="form-control form-control-sm">
             <option value="">Select Item</option>
             {% for it in items %}
@@ -120,6 +136,7 @@
             {% endfor %}
         </select>
     </div>
+
 
     <!-- Bora -->
     <div class="col-md-auto" style="width:75px;">
@@ -198,7 +215,9 @@
     <!-- Lot No -->
     <div class="col-md-auto" style="width:80px;">
         <label class="form-label mb-1">LotNo</label>
-        <input type="text" id="lotno" class="form-control form-control-sm" maxlength="50">
+        <!-- Enter on this will jump to Add button -->
+        <input type="text" id="lotno" class="form-control form-control-sm"
+                maxlength="50" data-next="#addItemBtn">
     </div>
 
     <!-- Add Button -->
@@ -206,6 +225,7 @@
         <label class="form-label mb-1 text-white">.</label>
         <button type="button" id="addItemBtn" class="btn btn-success btn-sm w-100">Add</button>
     </div>
+
 </div>
 
 <!-- ==================================================== -->
@@ -255,7 +275,7 @@
                         <label for="totalamt" class="form-label me-2 mb-0">Total Amount:</label>
                         <input type="number" id="totalamt" name="totalamt"
                             class="form-control text-end w-50" readonly
-                            value="{{ sale.totalamt|default:0 }}">
+                            value="{{ sale.totalamt|default_if_none:'' }}">
                     </div>
 
                     <!-- Batav (was Bora) -->
@@ -263,10 +283,10 @@
                         <label class="form-label me-2 mb-0">Batav:</label>
                         <input type="number" step="any" id="batavpercent" name="batavpercent"
                             class="form-control text-end w-25 me-2"
-                            value="{{ sale.batavpercent|default:0 }}">
+                            value="{{ sale.batavpercent|default_if_none:'' }}">
                         <input type="number" step="any" id="batavamt" name="batavamt"
                             class="form-control text-end w-25"
-                            readonly value="{{ sale.batavamt|default:0 }}">
+                            readonly value="{{ sale.batavamt|default_if_none:'' }}">
                     </div>
 
                     <!-- Dalali -->
@@ -274,10 +294,10 @@
                         <label class="form-label me-2 mb-0">Dalali:</label>
                         <input type="number" step="any" id="dr" name="dr"
                             class="form-control text-end w-25 me-2"
-                            value="{{ sale.dr|default:0 }}">
+                            value="{{ sale.dr|default_if_none:'' }}">
                         <input type="number" step="any" id="dramt" name="dramt"
                             class="form-control text-end w-25"
-                            readonly value="{{ sale.dramt|default:0 }}">
+                            readonly value="{{ sale.dramt|default_if_none:'' }}">
                     </div>
 
                     <!-- QI -->
@@ -285,7 +305,7 @@
                         <label class="form-label me-2 mb-0">QI:</label>
                         <input type="number" step="any" id="qi" name="qi"
                             class="form-control text-end w-50"
-                            value="{{ sale.qi|default:0 }}">
+                            value="{{ sale.qi|default_if_none:'' }}">
                     </div>
 
                     <!-- Other -->
@@ -293,7 +313,7 @@
                         <label for="other" class="form-label me-2 mb-0">Other:</label>
                         <input type="number" step="any" id="other" name="other"
                             class="form-control text-end w-50"
-                            value="{{ sale.other|default:0 }}">
+                            value="{{ sale.other|default_if_none:'' }}">
                     </div>
 
                     <!-- Total -->
@@ -301,7 +321,7 @@
                         <label for="total" class="form-label me-2 mb-0">Total:</label>
                         <input type="number" id="total" name="total"
                             class="form-control text-end w-50" readonly
-                            value="{{ sale.total|default:0 }}">
+                            value="{{ sale.total|default_if_none:'' }}">
                     </div>
 
                     <!-- Advance -->
@@ -309,7 +329,7 @@
                         <label for="advance" class="form-label me-2 mb-0">Advance:</label>
                         <input type="number" step="any" id="advance" name="advance"
                             class="form-control text-end w-50"
-                            value="{{ sale.advance|default:0 }}">
+                            value="{{ sale.advance|default_if_none:'' }}">
                     </div>
 
                     <!-- Net Amount -->
@@ -317,7 +337,7 @@
                         <label for="netamt" class="form-label me-2 mb-0">Net Amount:</label>
                         <input type="number" id="netamt" name="netamt"
                             class="form-control text-end w-50 fw-bold text-success"
-                            readonly value="{{ sale.netamt|default:0 }}">
+                            readonly value="{{ sale.netamt|default_if_none:'' }}">
                     </div>
                 </div>
             </div>
@@ -471,6 +491,7 @@ function resetAddFormFields(){
 
 
 /* ===== Add / Update Item ===== */
+/* ===== Add / Update Item ===== */
 document.getElementById('addItemBtn').addEventListener('click', function(){
     const itemSelect = document.getElementById('itemSelect'); 
     if(!itemSelect.value){ alert('Select item'); return; }
@@ -513,7 +534,23 @@ document.getElementById('addItemBtn').addEventListener('click', function(){
 
     updateUI();
     resetAddFormFields();
+
+    // --- focus Remark after row is added ---
+    // Try to focus either #id_remark or #remark (whichever your template uses).
+    // Small timeout allows any DOM updates to finish.
+    setTimeout(() => {
+      const remark = document.querySelector('#id_remark, #remark');
+      if (remark) {
+        try {
+          remark.focus({preventScroll: false});
+          if (typeof remark.select === 'function') remark.select();
+        } catch(e) {
+          remark.focus();
+        }
+      }
+    }, 120);
 });
+
 
 
 /* ===== Remove Item ===== */

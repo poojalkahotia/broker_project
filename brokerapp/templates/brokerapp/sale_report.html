@@ -191,8 +191,6 @@
            target="_blank" rel="noopener">
            <i class="fas fa-file-pdf"></i> PDF
        </a>
-          
-
       </div>
       <small class="text-muted">Report generated on {{ now|date:"d M Y, h:i A" }}</small>
     </div>
@@ -210,40 +208,44 @@ document.getElementById("exportExcel").addEventListener("click", function () {
   a.download = 'sale_report.xls';
   a.click();
 });
-// Keyboard Shortcuts (global)
-// Ctrl+Shift+E => Export Excel
-// Ctrl+Shift+P => Export PDF
-// Notes:
-// - Ignores when user is typing in an input/textarea
-// - Triggers existing buttons/links so no duplicate logic
-// ===========================
-document.addEventListener('keydown', function(e){
-  // Ignore when typing in form fields to avoid surprises
-  const tag = document.activeElement && document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-  // Normalize key codes for reliability
-  const isCtrlShift = e.ctrlKey && e.shiftKey;
-  const key = (e.code || e.key || '').toUpperCase();
+// Robust page-level keyboard shortcuts — use keyup to avoid conflict with global Enter keydown handlers
+document.addEventListener('keyup', function(e){
+  try {
+    const active = document.activeElement;
+    const tag = active && active.tagName;
+    // Ignore when user is typing in an input/textarea or contenteditable
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (active && active.isContentEditable)) return;
 
-  // Ctrl+Shift+E => Excel
-  if (isCtrlShift && (key === 'KEYE' || key === 'E')) {
-    const btn = document.getElementById('exportExcel');
-    if (btn) {
-      e.preventDefault();
-      btn.click();  // reuse existing Excel export
+    // need both Ctrl + Shift for shortcuts
+    if (!(e.ctrlKey && e.shiftKey)) return;
+
+    // Normalize key value
+    const key = (e.key || '').toUpperCase();
+
+    // Ctrl+Shift+E => Excel
+    if (key === 'E') {
+      const btn = document.getElementById('exportExcel');
+      if (btn) {
+        e.preventDefault();
+        btn.click();
+      }
+      return;
     }
-  }
 
-  // Ctrl+Shift+P => PDF
-  if (isCtrlShift && (key === 'KEYP' || key === 'P')) {
-    const link = document.getElementById('exportPdf');
-    if (link) {
-      e.preventDefault();
-      // Open in new tab (same as clicking the PDF button)
-      link.click();
+    // Ctrl+Shift+P => PDF
+    if (key === 'P') {
+      const link = document.getElementById('exportPdf');
+      if (link) {
+        e.preventDefault();
+        link.click();
+      }
+      return;
     }
+  } catch (err) {
+    // ignore errors silently — shortcuts are optional
+    console.warn('shortcut handler error', err);
   }
-});  
+});
 </script>
 {% endblock %}

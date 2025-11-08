@@ -21,6 +21,11 @@ from django.http import HttpResponse
 from django.db.models import ProtectedError
 from io import BytesIO
 from fpdf import FPDF
+from django.views.generic import TemplateView
+from .forms import AllPartyBalanceForm
+from django.urls import reverse
+from urllib.parse import quote
+
 
 class PDF(FPDF):
     def header(self):
@@ -1107,7 +1112,18 @@ def party_view(request, pk=None):
             else:
                 messages.success(request, '✅ Party added successfully!')
 
-            return redirect('party')
+            # ✅ Redirect logic simplified for Sale return
+            next_page = request.GET.get('next')
+            if next_page == 'sale':
+                # user came from Sale page → go back to Sale after saving
+                return redirect(reverse('sale_form_new'))
+            elif next_page == 'purchase':
+                return redirect(reverse('purchase_form_new'))
+            elif next_page == 'daily':
+                return redirect(reverse('daily_page'))
+
+            # Default: stay on Party list (existing behavior)
+            return redirect(f"{reverse('party')}?created_id={obj.pk}&created_name={quote(obj.partyname)}")
 
     else:
         # ⬇️ current_org पास करें
@@ -1141,38 +1157,54 @@ def party_delete(request, pk):
 
 
 def broker_view(request, pk=None):
-    # current_org available check
+    # Only fetch inside current org (same as party_view)
     assert getattr(request, "current_org", None) is not None, "current_org missing"
-
-    # Fetch only within current org
-    instance = get_object_or_404(Broker, pk=pk, org=request.current_org) if pk else None
+    instance = None
+    if pk:
+        instance = get_object_or_404(Broker, pk=pk, org=request.current_org)
 
     if request.method == 'POST':
-        # current_org फ़ॉर्म को पास करें
+        # ⬇️ pass current_org into form
         form = BrokerForm(request.POST, instance=instance, current_org=request.current_org)
+
         if form.is_valid():
             obj = form.save(commit=False)
-            obj.org = request.current_org        # bind to current org
+
+            # Ensure broker always belongs to selected org
+            obj.org = request.current_org
             obj.save()
+
             if pk:
                 messages.success(request, '✅ Broker updated successfully!')
             else:
                 messages.success(request, '✅ Broker added successfully!')
-            return redirect('broker')
-        else:
-            messages.error(request, f"❌ Could not save broker:\n{form.errors.as_text()}")
+
+            # ✅ Redirect logic simplified for Sale return
+            next_page = request.GET.get('next')
+            if next_page == 'sale':
+                # user came from Sale page → go back to Sale after saving
+                return redirect(reverse('sale_form_new'))
+            elif next_page == 'purchase':
+                return redirect(reverse('purchase_form_new'))
+            elif next_page == 'daily':
+                return redirect(reverse('daily_page'))
+
+            # Default: stay on Broker list (existing behavior)
+            return redirect(f"{reverse('broker')}?created_id={obj.pk}&created_name={quote(obj.brokername)}")
+
     else:
+        # ⬇️ pass current_org into form
         form = BrokerForm(instance=instance, current_org=request.current_org)
 
-    # List only current org’s brokers
+    # Show only current org brokers
     brokers = Broker.objects.filter(org=request.current_org)
+
     return render(request, 'brokerapp/broker.html', {
         'form': form,
         'brokers': brokers,
         'editing': pk is not None,
         'editing_id': pk
     })
-
 # Delete Broker
 def broker_delete(request, pk):
     """Safely delete a Broker — show warning if linked to transactions."""
@@ -1197,36 +1229,72 @@ def dashboard(request):
 
 
 def item_view(request, pk=None):
+    # Only fetch inside current org (same as party_view / broker_view)
     assert getattr(request, "current_org", None) is not None, "current_org missing"
-
-    instance = get_object_or_404(HeadItem, pk=pk, org=request.current_org) if pk else None
+    instance = None
+    if pk:
+        instance = get_object_or_404(HeadItem, pk=pk, org=request.current_org)
 
     if request.method == 'POST':
-        
+        action = request.POST.get('action')
+
+        # ---- DELETE action ----
+        if action == 'delete':
+            # item_pk may be item_name (string PK) or provided via URL pk
+            item_pk = request.POST.get('item_pk') or pk
+            if not item_pk:
+                messages.error(request, '❌ No item selected to delete.')
+                return redirect(reverse('item'))
+
+            try:
+                obj_to_delete = get_object_or_404(HeadItem, pk=item_pk, org=request.current_org)
+                obj_to_delete.delete()
+                messages.success(request, '✅ Item deleted successfully!')
+            except Exception as e:
+                # catch FK/constraint errors or unexpected issues
+                messages.error(request, f'❌ Could not delete item: {e}')
+            return redirect(reverse('item'))
+
+        # ---- SAVE / CREATE / UPDATE ----
         form = ItemForm(request.POST, instance=instance, current_org=request.current_org)
+
         if form.is_valid():
             obj = form.save(commit=False)
+            # Ensure item always belongs to selected org
             obj.org = request.current_org
             obj.save()
-            
-            messages.success(request, '✅ Item updated successfully!' if pk else '✅ Item added successfully!')
-            return redirect('item')
+
+            if pk:
+                messages.success(request, '✅ Item updated successfully!')
+            else:
+                messages.success(request, '✅ Item added successfully!')
+
+            # Redirect back to Sale if requested
+            next_page = request.GET.get('next')
+            if next_page == 'sale':
+                return redirect(reverse('sale_form_new'))
+            elif next_page == 'purchase':
+                return redirect(reverse('purchase_form_new'))
+            elif next_page == 'daily':
+                return redirect(reverse('daily_page'))
+
+            # Default: stay on Item list and pass created id/name for JS
+            return redirect(f"{reverse('item')}?created_id={obj.pk}&created_name={quote(obj.item_name)}")
         else:
             messages.error(request, f"❌ Could not save item:\n{form.errors.as_text()}")
     else:
-        form = ItemForm(instance=instance)
-        items = HeadItem.objects.all()
+        # pass current_org into form on GET as well
         form = ItemForm(instance=instance, current_org=request.current_org)
+
+    # Show only current org items
     items = HeadItem.objects.filter(org=request.current_org)
 
     return render(request, 'brokerapp/item.html', {
         'form': form,
         'items': items,
-       # ... आपकी बाकी context वैसी ही रहे
-       'editing': pk is not None,
-       'editing_id': pk
+        'editing': pk is not None,
+        'editing_id': pk
     })
-
 
 
 
@@ -1570,3 +1638,153 @@ def daily_page_pdf(request):
     return response
 
 
+
+
+class AllPartyBalanceView(TemplateView):
+    template_name = "brokerapp/account/all_party_balance.html"
+
+    def _org_filter(self, qs):
+        """
+        Limit to current org if available in session.
+        Works even if the model doesn't have an 'org' attr by checking actual field names.
+        """
+        org_id = self.request.session.get("org_id")
+        if not org_id:
+            return qs
+        # check model fields for org_id attname
+        field_names = [f.attname for f in qs.model._meta.fields]
+        if "org_id" in field_names:
+            return qs.filter(org_id=org_id)
+        return qs
+
+    def get(self, request, *args, **kwargs):
+        today = date.today()
+        form = AllPartyBalanceForm(initial={"start_date": today, "end_date": today})
+
+        # populate party dropdown (org-aware) — ORDER BY partyname (HeadParty PK = partyname)
+        org_id = request.session.get("org_id")
+        qs = HeadParty.objects.all().order_by("partyname")
+        if org_id:
+            # HeadParty has org FK named 'org' and attname 'org_id'
+            qs = qs.filter(org_id=org_id)
+        form.fields["party"].queryset = qs
+
+        ctx = self._build_context(form, today, today, None)
+        return self.render_to_response(ctx)
+
+    def post(self, request, *args, **kwargs):
+        form = AllPartyBalanceForm(request.POST)
+
+        # re-populate party dropdown on POST too (same logic as GET)
+        org_id = request.session.get("org_id")
+        qs = HeadParty.objects.all().order_by("partyname")
+        if org_id:
+            qs = qs.filter(org_id=org_id)
+        form.fields["party"].queryset = qs
+
+        if not form.is_valid():
+            today = date.today()
+            return self.render_to_response(self._build_context(form, today, today, None))
+
+        start = form.cleaned_data["start_date"]
+        end = form.cleaned_data["end_date"]
+        party = form.cleaned_data["party"]
+        return self.render_to_response(self._build_context(form, start, end, party))
+
+    def _sum(self, qs, field):
+        """Safe sum returning Decimal(0) when None."""
+        return qs.aggregate(t=Sum(field))["t"] or Decimal("0")
+
+    def _build_context(self, form, start, end, party):
+        """
+        Build rows and totals.
+        Calculation per party:
+           Balance = (openingdebit - openingcredit + preStart(Sale - Purchase + Naame - Jama))
+                     + period(Sale - Purchase + Naame - Jama)
+        """
+
+        # parties ordered by partyname (HeadParty PK = partyname)
+        parties = HeadParty.objects.all().order_by("partyname")
+        if party:
+            # party is a HeadParty instance; filter using partyname (PK)
+            parties = parties.filter(partyname=party.partyname)
+
+        rows = []
+        totals = {
+            "opdr": Decimal("0"), "opcr": Decimal("0"),
+            "sale": Decimal("0"), "purchase": Decimal("0"),
+            "naame": Decimal("0"), "jama": Decimal("0"),
+            "balance": Decimal("0")
+        }
+
+        # DailyPage selection for Naame/Jama
+        dp_before = DailyPage.objects.filter(date__lt=start)
+        dp_range = DailyPage.objects.filter(date__range=(start, end))
+
+        org_id = self.request.session.get("org_id")
+        if org_id:
+            # DailyPage has org FK -> attname org_id
+            dp_before = dp_before.filter(org_id=org_id)
+            dp_range = dp_range.filter(org_id=org_id)
+
+        for p in parties:
+            # HeadParty uses openingdebit / openingcredit
+            op_dr = Decimal(getattr(p, "openingdebit", 0) or 0)
+            op_cr = Decimal(getattr(p, "openingcredit", 0) or 0)
+
+            # Pre-start totals (before start date)
+            sale_before = self._sum(
+                self._org_filter(SaleMaster.objects.filter(party=p, invdate__lt=start)),
+                "netamt"
+            )
+            purch_before = self._sum(
+                self._org_filter(PurchaseMaster.objects.filter(party=p, invdate__lt=start)),
+                "netamt"
+            )
+            naame_before = self._sum(
+                NaameEntry.objects.filter(daily_page__in=dp_before, party=p),
+                "amount"
+            )
+            jama_before = self._sum(
+                JamaEntry.objects.filter(daily_page__in=dp_before, party=p),
+                "amount"
+            )
+
+            opening = (op_dr - op_cr) + (sale_before - purch_before + naame_before - jama_before)
+
+            # Period totals (start..end)
+            sale = self._sum(
+                self._org_filter(SaleMaster.objects.filter(party=p, invdate__range=(start, end))),
+                "netamt"
+            )
+            purchase = self._sum(
+                self._org_filter(PurchaseMaster.objects.filter(party=p, invdate__range=(start, end))),
+                "netamt"
+            )
+            naame = self._sum(
+                NaameEntry.objects.filter(daily_page__in=dp_range, party=p),
+                "amount"
+            )
+            jama = self._sum(
+                JamaEntry.objects.filter(daily_page__in=dp_range, party=p),
+                "amount"
+            )
+
+            balance = opening + sale - purchase + naame - jama
+
+            rows.append({
+                "party": p,
+                "op_dr": op_dr, "op_cr": op_cr, "opening": opening,
+                "sale": sale, "purchase": purchase, "naame": naame, "jama": jama,
+                "balance": balance
+            })
+
+            totals["opdr"] += op_dr
+            totals["opcr"] += op_cr
+            totals["sale"] += sale
+            totals["purchase"] += purchase
+            totals["naame"] += naame
+            totals["jama"] += jama
+            totals["balance"] += balance
+
+        return {"form": form, "rows": rows, "totals": totals, "start": start, "end": end}

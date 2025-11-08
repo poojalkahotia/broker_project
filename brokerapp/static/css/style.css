@@ -140,3 +140,19 @@ input[type="number"]::-webkit-outer-spin-button {
   appearance: none;             /* Standard (satisfy linter) */
   margin: 0;
 }
+
+/* ===== Hide EntryNo column in Daily Page tables =====
+   Remove or comment this block to make EntryNo visible again
+   -------------------------------------------------------- */
+#jama_table th:first-child,
+#jama_table td:first-child,
+#naame_table th:first-child,
+#naame_table td:first-child {
+  display: none !important;
+}
+/* keeps layout consistent even when EntryNo is hidden */
+.table-professional th,
+.table-professional td {
+  vertical-align: middle;
+}
+

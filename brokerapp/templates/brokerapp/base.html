@@ -54,6 +54,14 @@
                         <li><a class="dropdown-item" href="{% url 'bardana_report' %}">Bardana Report</a></li>
                     </ul>
                 </li>
+
+                 <!-- Accounts Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Account</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'all_party_balance' %}">All Party Balance</a></li>
+                    </ul>
+                </li>
             </ul>
 
             <!-- RIGHT: Org label (single-company mode) -->
@@ -102,5 +110,157 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- ===== single, final script: enter-capture + zero-clear (focuses Save if no next field) ===== -->
+<script>
+(function(){
+  // remove any previous installation we created earlier (safe)
+  try { document.removeEventListener('keydown', window.__enterCaptureHandler || function(){}, true); } catch(e){}
+
+  // helper: robustly focus an element (even if not normally tabbable)
+  function safeFocus(el) {
+    if (!el) return;
+    try {
+      el.focus({preventScroll: false});
+      if (typeof el.scrollIntoView === 'function') el.scrollIntoView({block:'center', behavior:'smooth'});
+      return;
+    } catch(e){}
+    try {
+      // fallback: make temporarily focusable
+      const prev = el.getAttribute && el.getAttribute('tabindex');
+      if (!prev) el.setAttribute('tabindex','-1');
+      el.focus();
+      if (typeof el.scrollIntoView === 'function') el.scrollIntoView({block:'center', behavior:'smooth'});
+      if (!prev) el.removeAttribute('tabindex');
+    } catch(err){}
+  }
+
+  // decide if element should be considered a "manual" input to land on
+  function isManualField(el) {
+    if (!el) return false;
+    if (el.type === 'hidden') return false;
+    if (el.disabled) return false;
+    // not visible
+    if (el.offsetParent === null && el.getAttribute('aria-hidden') !== 'false') return false;
+    // explicit skip markers
+    if (el.dataset && el.dataset.skipEnter === "true") return false;
+    if (el.classList && el.classList.contains('skip-enter')) return false;
+    // auto-calculated fields: either readonly or marked with data-auto or .auto-calc
+    if (el.hasAttribute && el.hasAttribute('readonly')) return false;
+    if (el.dataset && el.dataset.auto === "true") return false;
+    if (el.classList && el.classList.contains('auto-calc')) return false;
+    // anchors - skip
+    if (el.tagName === 'A') return false;
+    // buttons: only allow if explicitly focusable via data-focusable="true"
+    if (el.tagName === 'BUTTON') {
+      return el.dataset && el.dataset.focusable === "true";
+    }
+    // inputs/selects/textarea are otherwise manual
+    return (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.hasAttribute('tabindex'));
+  }
+
+  // main enter-capture handler
+  function enterCapture(e){
+    if (e.key !== 'Enter') return;
+
+    const el = e.target || document.activeElement;
+    if (!el) return;
+
+    // ✅ Skip specific IDs where Enter should behave normally (you can add more IDs)
+    const skipIds = ['invno', 'saveBtn', 'addItemBtn'];
+    if (el.id && skipIds.includes(el.id)) return;
+
+    // explicit override: data-next="#id" (highest priority) — honour even on TEXTAREA
+    try {
+      const nxtAttr = el.getAttribute && el.getAttribute('data-next');
+      if (nxtAttr) {
+        const tgt = document.querySelector(nxtAttr);
+        if (tgt && !tgt.disabled && tgt.offsetParent !== null) {
+          safeFocus(tgt);
+        }
+        // if data-next present we always handle navigation here
+        e.preventDefault();
+        return;
+      }
+    } catch(err){}
+
+    // allow newline in textareas and contenteditable (only if no data-next)
+    if (el.tagName === 'TEXTAREA' || el.isContentEditable) return;
+
+    // allow Enter when a submit/button is focused (unless explicitly allowed to navigate)
+    if (el.tagName === 'BUTTON' && (el.type === 'submit' || el.type === 'button')) return;
+    if (el.tagName === 'A') return;
+
+    // if current element is not a manual field (readonly/auto-calc), let Enter behave normally
+    if (!isManualField(el)) return;
+
+    // intercept default to control navigation
+    e.preventDefault();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    else e.stopPropagation();
+
+    const form = el.form || el.closest('form');
+    if (!form) return;
+
+    // collect focusable nodes in DOM order and filter to manual fields only
+    const allFocusable = Array.from(form.querySelectorAll('input, select, textarea, button, [tabindex]'))
+      .filter(x => x && x.type !== 'hidden' && !x.disabled);
+
+    // create ordered list of manual fields (skip readonly/auto/skip-enter)
+    const manual = allFocusable.filter(isManualField);
+    if (manual.length === 0) return;
+
+    const idx = manual.indexOf(el);
+    // if element not in manual list, find its position by DOM order among allFocusable and map to manual
+    let currentIndex = idx;
+    if (currentIndex === -1) {
+      // fallback: find position in allFocusable
+      const pos = allFocusable.indexOf(el);
+      if (pos === -1) return;
+      // find next manual after this pos
+      currentIndex = manual.findIndex(m => allFocusable.indexOf(m) > pos);
+    }
+
+    // next manual field
+    let nextField = null;
+    if (currentIndex >= 0 && currentIndex < manual.length - 1) {
+      nextField = manual[currentIndex + 1];
+    } else {
+      // no next manual in same form - try to find first manual after current's position among allFocusable
+      const pos = allFocusable.indexOf(el);
+      for (let i = pos + 1; i < allFocusable.length; i++) {
+        if (isManualField(allFocusable[i])) { nextField = allFocusable[i]; break; }
+      }
+    }
+
+    if (nextField) {
+      safeFocus(nextField);
+      // select text for quick overwrite when appropriate
+      if (typeof nextField.select === 'function' && (nextField.tagName === 'INPUT' || nextField.tagName === 'TEXTAREA')) {
+        try { nextField.select(); } catch(e){}
+      }
+      return;
+    }
+
+    // no next manual field found — fallback: focus form's primary save/submit button
+    try {
+      let submitBtn = form.querySelector('[data-save="true"], .save-btn, button[type="submit"], input[type="submit"]');
+      if (!submitBtn) {
+        // try any visible button inside form
+        submitBtn = Array.from(form.querySelectorAll('button, input[type="button"], input[type="submit"]'))
+                          .find(b => b && !b.disabled && b.offsetParent !== null);
+      }
+      if (submitBtn) {
+        safeFocus(submitBtn);
+      }
+    } catch(err){}
+  }
+
+  document.addEventListener('keydown', enterCapture, true);
+  window.__enterCaptureHandler = enterCapture;
+})(); // end IIFE
+</script>
+
+
 </body>
 </html>

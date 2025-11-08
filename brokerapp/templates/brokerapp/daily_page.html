@@ -27,29 +27,48 @@
         </div>
 
         <div class="card-body d-flex flex-column p-2">
-          <form id="jama_form" class="row g-2 align-items-end mb-2">
+           <form id="jama_form" class="row g-2 align-items-end mb-2">
             {% csrf_token %}
+
+            <!-- Amount (moved first to match table) -->
+            <div class="col-md-2">
+              <label class="form-label">Amount</label>
+              <input type="number" name="amount" id="jama_amount" class="form-control text-end" step="0.01">
+            </div>
+
+            <!-- Party -->
             <div class="col-md-3">
-              <label class="form-label">Party</label>
+              <label class="form-label">
+                <a href="{% url 'party_create' %}?next=daily"
+                  title="Open Party (return to Daily after save)"
+                  style="text-decoration:none; color:#0b3d91;">
+                    Party <i class="bi bi-plus-circle"></i>
+                </a>
+              </label>
+
               <select name="party" id="jama_party" class="form-control">
                 <option value="">Select Party</option>
                 {% for p in parties %}<option value="{{ p.partyname }}">{{ p.partyname }}</option>{% endfor %}
               </select>
             </div>
 
+            <!-- Broker -->
             <div class="col-md-3">
-              <label class="form-label">Broker</label>
+              <label class="form-label">
+                <a href="{% url 'broker_create' %}?next=daily"
+                  title="Open Broker (return to Daily after save)"
+                  style="text-decoration:none; color:#0b3d91;">
+                    Broker <i class="bi bi-plus-circle"></i>
+                </a>
+              </label>
+
               <select name="broker" id="jama_broker" class="form-control">
                 <option value="">Select Broker</option>
                 {% for b in brokers %}<option value="{{ b.brokername }}">{{ b.brokername }}</option>{% endfor %}
               </select>
             </div>
 
-            <div class="col-md-2">
-              <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="jama_amount" class="form-control text-end" step="0.01">
-            </div>
-
+            <!-- Remark -->
             <div class="col-md-3">
               <label class="form-label">Remark</label>
               <input type="text" name="remark" id="jama_remark" class="form-control">
@@ -63,12 +82,12 @@
 
           <div class="table-responsive flex-grow-1" style="overflow-y:auto;">
             <table class="table table-sm mb-0 table-professional" id="jama_table">
-              <thead>
+               <thead>
                 <tr>
                   <th style="width:70px">EntryNo</th>
+                  <th class="amount-col">Amount</th>
                   <th class="party-col">Party</th>
                   <th class="broker-col">Broker</th>
-                  <th class="amount-col">Amount</th>
                   <th class="remark-col">Remark</th>
                   <th style="width:110px">Action</th>
                 </tr>
@@ -77,6 +96,7 @@
                 {% for j in jama_entries %}
                   <tr data-entry="{{ j.entry_no }}">
                     <td>{{ j.entry_no }}</td>
+                    <td class="amount-col text-end">{{ j.amount }}</td>
                     <td>
                       {% if j.party %}
                         {% if j.party.partyname %}{{ j.party.partyname }}{% else %}{{ j.party }}{% endif %}
@@ -93,7 +113,6 @@
                         {{ j.broker_name|default:'' }}
                       {% endif %}
                     </td>
-                    <td class="text-end">{{ j.amount }}</td>
                     <td>{{ j.remark|default:'' }}</td>
                     <td>
                       <button class="btn btn-sm btn-danger jama-remove-btn" data-entry="{{ j.entry_no }}">Remove</button>
@@ -118,27 +137,48 @@
         <div class="card-body d-flex flex-column p-2">
           <form id="naame_form" class="row g-2 align-items-end mb-2">
             {% csrf_token %}
-            <div class="col-md-3">
-              <label class="form-label">Party</label>
-              <select name="party" id="naame_party" class="form-control">
-                <option value="">Select Party</option>
-                {% for p in parties %}<option value="{{ p.partyname }}">{{ p.partyname }}</option>{% endfor %}
-              </select>
-            </div>
 
-            <div class="col-md-3">
-              <label class="form-label">Broker</label>
-              <select name="broker" id="naame_broker" class="form-control">
-                <option value="">Select Broker</option>
-                {% for b in brokers %}<option value="{{ b.brokername }}">{{ b.brokername }}</option>{% endfor %}
-              </select>
-            </div>
-
+            <!-- Amount (moved first to match table) -->
             <div class="col-md-2">
               <label class="form-label">Amount</label>
               <input type="number" name="amount" id="naame_amount" class="form-control text-end" step="0.01">
             </div>
 
+            <!-- Party -->
+            <div class="col-md-3">
+              <label class="form-label">
+                <a href="{% url 'party_create' %}?next=daily"
+                  title="Open Party (return to Daily after save)"
+                  style="text-decoration:none; color:#0b3d91;">
+                  Party <i class="bi bi-plus-circle"></i>
+                </a>
+              </label>
+              <select name="party" id="naame_party" class="form-control">
+                <option value="">Select Party</option>
+                {% for p in parties %}
+                  <option value="{{ p.partyname }}">{{ p.partyname }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Broker -->
+            <div class="col-md-3">
+              <label class="form-label">
+                <a href="{% url 'broker_create' %}?next=daily"
+                  title="Open Broker (return to Daily after save)"
+                  style="text-decoration:none; color:#0b3d91;">
+                  Broker <i class="bi bi-plus-circle"></i>
+                </a>
+              </label>
+              <select name="broker" id="naame_broker" class="form-control">
+                <option value="">Select Broker</option>
+                {% for b in brokers %}
+                  <option value="{{ b.brokername }}">{{ b.brokername }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Remark -->
             <div class="col-md-3">
               <label class="form-label">Remark</label>
               <input type="text" name="remark" id="naame_remark" class="form-control">
@@ -152,20 +192,21 @@
 
           <div class="table-responsive flex-grow-1" style="overflow-y:auto;">
             <table class="table table-sm mb-0 table-professional" id="naame_table">
-              <thead>
+               <thead>
                 <tr>
                   <th style="width:70px">EntryNo</th>
+                  <th class="amount-col">Amount</th>
                   <th class="party-col">Party</th>
                   <th class="broker-col">Broker</th>
-                  <th class="amount-col">Amount</th>
                   <th class="remark-col">Remark</th>
                   <th style="width:110px">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {% for n in naame_entries %}
+                 {% for n in naame_entries %}
                   <tr data-entry="{{ n.entry_no }}">
                     <td>{{ n.entry_no }}</td>
+                    <td class="amount-col text-end">{{ n.amount }}</td>
                     <td>
                       {% if n.party %}
                         {% if n.party.partyname %}{{ n.party.partyname }}{% else %}{{ n.party }}{% endif %}
@@ -182,7 +223,6 @@
                         {{ n.broker_name|default:'' }}
                       {% endif %}
                     </td>
-                    <td class="text-end">{{ n.amount }}</td>
                     <td>{{ n.remark|default:'' }}</td>
                     <td>
                       <button class="btn btn-sm btn-danger naame-remove-btn" data-entry="{{ n.entry_no }}">Remove</button>
@@ -232,11 +272,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.querySelector('[name=csrfmiddlewaretoken]').value : '';
 
   function formatNum(n){ return parseFloat(n||0).toFixed(2); }
+   // Sum numeric values from the cell marked with .amount-col (robust vs column position)
   function sumColumn(sel){
     let s = 0;
     document.querySelectorAll(sel + ' tbody tr').forEach(tr => {
-      const v = tr.querySelector('td:nth-child(4)');
-      if (v) s += parseFloat(v.textContent.trim() || 0);
+      const v = tr.querySelector('td.amount-col');
+      if (v) s += parseFloat((v.textContent || '').replace(/,/g,'').trim() || 0);
     });
     return s;
   }
@@ -265,13 +306,16 @@ document.addEventListener('DOMContentLoaded', function() {
       if (data.error) { alert(data.error); return; }
       const e = data.entry, t = document.querySelector('#jama_table tbody'), tr = document.createElement('tr');
       tr.dataset.entry = e.entry_no;
+            // Order must match server-rendered rows:
+      // EntryNo | Amount | Party | Broker | Remark | Action
       tr.innerHTML =
         '<td>' + e.entry_no + '</td>' +
+        '<td class="amount-col text-end">' + (parseFloat(e.amount || 0).toFixed(2)) + '</td>' +
         '<td>' + (e.party_name || '') + '</td>' +
         '<td>' + (e.broker_name || '') + '</td>' +
-        '<td class="text-end">' + (parseFloat(e.amount || 0).toFixed(2)) + '</td>' +
         '<td>' + (e.remark ? String(e.remark) : '') + '</td>' +
         '<td><button class="btn btn-sm btn-danger jama-remove-btn" data-entry="' + e.entry_no + '">Remove</button></td>';
+
       t.appendChild(tr); updateTotals();
       document.getElementById('jama_amount').value = ''; document.getElementById('jama_remark').value = '';
     }).catch(() => alert('Failed to add Jama'));
@@ -292,11 +336,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (data.error) { alert(data.error); return; }
       const e = data.entry, t = document.querySelector('#naame_table tbody'), tr = document.createElement('tr');
       tr.dataset.entry = e.entry_no;
+            // Match server-rendered order: EntryNo | Amount | Party | Broker | Remark | Action
       tr.innerHTML =
         '<td>' + e.entry_no + '</td>' +
+        '<td class="amount-col text-end">' + (parseFloat(e.amount || 0).toFixed(2)) + '</td>' +
         '<td>' + (e.party_name || '') + '</td>' +
         '<td>' + (e.broker_name || '') + '</td>' +
-        '<td class="text-end">' + (parseFloat(e.amount || 0).toFixed(2)) + '</td>' +
         '<td>' + (e.remark ? String(e.remark) : '') + '</td>' +
         '<td><button class="btn btn-sm btn-danger naame-remove-btn" data-entry="' + e.entry_no + '">Remove</button></td>';
       t.appendChild(tr); updateTotals();

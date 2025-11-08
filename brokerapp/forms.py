@@ -4,10 +4,35 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from .models import Organization
 
-class PartyForm(forms.ModelForm):
+# ----------------- Base: BlankZeroModelForm -----------------
+from django.forms import ModelForm
+from django.forms.fields import DecimalField, IntegerField, FloatField
+
+class BlankZeroModelForm(ModelForm):
+    """
+    Base ModelForm: when rendering a new (unbound) form (no instance),
+    remove initial/default zeros from numeric fields so inputs render blank.
+    This is minimal and safe: it only affects display for new forms.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        is_new_display = (not self.is_bound) and (kwargs.get('instance') is None)
+        if is_new_display:
+            for name, field in self.fields.items():
+                if isinstance(field, (DecimalField, IntegerField, FloatField)):
+                    # remove any initial so widget won't render a value attribute
+                    field.initial = None
+                    # remove any hard-coded 'value' in widget attrs (defensive)
+                    try:
+                        if hasattr(field, 'widget') and getattr(field.widget, 'attrs', None):
+                            field.widget.attrs.pop('value', None)
+                    except Exception:
+                        pass
+
+# ----------------- Party / Broker / Item Forms -----------------
+class PartyForm(BlankZeroModelForm):
     class Meta:
         model = HeadParty
-        # ⬇️ org यूज़र से नहीं लेना; view सेट करेगा
         exclude = ['org']
         widgets = {
             'partyname': forms.TextInput(attrs={'class': 'form-control'}),
@@ -18,42 +43,35 @@ class PartyForm(forms.ModelForm):
             'mobile': forms.TextInput(attrs={'class': 'form-control'}),
             'otherno': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
-            'remark': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'remark': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'data-next': '#saveBtn'}),
             'openingdebit': forms.NumberInput(attrs={'class': 'form-control'}),
             'openingcredit': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
-        # ⬇️ view से आएगा; validation में काम आएगा
         self.current_org = kwargs.pop('current_org', None)
         super(PartyForm, self).__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].label = field.capitalize()
-
-        # Edit mode में partyname readonly
         if self.instance and self.instance.pk:
             self.fields['partyname'].widget.attrs['readonly'] = True
 
-    # ✅ Duplicate name validation (per-org)
     def clean_partyname(self):
         name = self.cleaned_data.get('partyname')
         if not name:
             return name
-
         qs = HeadParty.objects.filter(partyname__iexact=name)
         if self.current_org:
             qs = qs.filter(org=self.current_org)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
-
         if qs.exists():
             raise ValidationError("⚠️ This party already exists.")
         return name
 
-class BrokerForm(forms.ModelForm):
+class BrokerForm(BlankZeroModelForm):
     class Meta:
         model = Broker
-        # org यूज़र से नहीं लेंगे; view सेट करेगा
         exclude = ['org']
         widgets = {
             'brokername': forms.TextInput(attrs={'class': 'form-control'}),
@@ -61,21 +79,17 @@ class BrokerForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'openingdebit': forms.NumberInput(attrs={'class': 'form-control'}),
             'openingcredit': forms.NumberInput(attrs={'class': 'form-control'}),
-            'remark': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'remark': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'data-next': '#saveBtn'}),
         }
 
     def __init__(self, *args, **kwargs):
-        # view से आएगा; duplicate check में काम आएगा
         self.current_org = kwargs.pop('current_org', None)
         super(BrokerForm, self).__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].label = field.capitalize()
-
-        # Edit mode: brokername lock
         if self.instance and self.instance.pk:
             self.fields['brokername'].disabled = True
 
-    # ✅ Duplicate broker per-org
     def clean_brokername(self):
         brokername = self.cleaned_data.get('brokername')
         if not brokername:
@@ -89,7 +103,7 @@ class BrokerForm(forms.ModelForm):
             raise ValidationError("⚠️ This broker already exists.")
         return brokername
 
-class ItemForm(forms.ModelForm):
+class ItemForm(BlankZeroModelForm):
     class Meta:
         model = HeadItem
         fields = ['item_name']
@@ -98,7 +112,6 @@ class ItemForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        # view से current_org आएगा; validation में काम आएगा
         self.current_org = kwargs.pop('current_org', None)
         super().__init__(*args, **kwargs)
         self.fields['item_name'].label = "Item Name"
@@ -107,22 +120,17 @@ class ItemForm(forms.ModelForm):
         name = self.cleaned_data.get('item_name')
         if not name:
             return name
-
         qs = HeadItem.objects.filter(item_name__iexact=name)
         if self.current_org:
             qs = qs.filter(org=self.current_org)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
-
         if qs.exists():
             raise ValidationError("⚠️ This item already exists.")
         return name
 
-
-
 # --------------------- SALE MASTER FORM ---------------------
-class SaleMasterForm(forms.ModelForm):
-    # Dropdowns (use same queryset), add classes consistent with bootstrap
+class SaleMasterForm(BlankZeroModelForm):
     party = forms.ModelChoiceField(
         queryset=HeadParty.objects.all().order_by('partyname'),
         empty_label="Select Party",
@@ -148,7 +156,7 @@ class SaleMasterForm(forms.ModelForm):
             'invno': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
             'invdate': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'awakno': forms.TextInput(attrs={'class': 'form-control'}),
-            'extra': forms.TextInput(attrs={'class': 'form-control'}),   # new field
+            'extra': forms.TextInput(attrs={'class': 'form-control'}),
             'vehicleno': forms.TextInput(attrs={'class': 'form-control'}),
             'totalamt': forms.NumberInput(attrs={'class': 'form-control'}),
             'batavpercent': forms.NumberInput(attrs={'class': 'form-control'}),
@@ -160,16 +168,15 @@ class SaleMasterForm(forms.ModelForm):
             'total': forms.NumberInput(attrs={'class': 'form-control'}),
             'advance': forms.NumberInput(attrs={'class': 'form-control'}),
             'netamt': forms.NumberInput(attrs={'class': 'form-control'}),
-            'remark': forms.TextInput(attrs={'class': 'form-control'}),  # single-line input
+            'remark': forms.TextInput(attrs={'class': 'form-control', 'data-next': '#saveBtn'}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
-        # keep basic validation here if needed; do not try to write to removed model fields
         return cleaned_data
 
 
-class SaleDetailsForm(forms.ModelForm):
+class SaleDetailsForm(BlankZeroModelForm):
     item = forms.ModelChoiceField(
         queryset=HeadItem.objects.all().order_by('item_name'),
         empty_label="Select Item",
@@ -179,7 +186,7 @@ class SaleDetailsForm(forms.ModelForm):
     class Meta:
         model = SaleDetails
         fields = [
-            'item', 'bora', 'bn', 'bnwt', 'bo', 'bowt','tbwt', 
+            'item', 'bora', 'bn', 'bnwt', 'bo', 'bowt','tbwt',
             'qty', 'rate', 'amount', 'partywt', 'millwt', 'diffwt', 'lotno'
         ]
         widgets = {
@@ -200,7 +207,6 @@ class SaleDetailsForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        # if amount not provided by JS, compute from qty*rate
         qty = cleaned_data.get('qty') or 0
         rate = cleaned_data.get('rate') or 0
         amount = cleaned_data.get('amount')
@@ -210,10 +216,9 @@ class SaleDetailsForm(forms.ModelForm):
         except Exception:
             pass
         return cleaned_data
+
 # --------------------- PURCHASE MASTER FORM ---------------------
-# --------------------- PURCHASE MASTER FORM ---------------------
-class PurchaseMasterForm(forms.ModelForm):
-     # Dropdowns (queryset __init__ में सेट करेंगे)
+class PurchaseMasterForm(BlankZeroModelForm):
     party = forms.ModelChoiceField(
         queryset=HeadParty.objects.none(),
         empty_label="Select Party",
@@ -238,24 +243,23 @@ class PurchaseMasterForm(forms.ModelForm):
             'invno': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
             'invdate': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'awakno': forms.TextInput(attrs={'class': 'form-control'}),
-            'extra': forms.TextInput(attrs={'class': 'form-control'}),   # new field
+            'extra': forms.TextInput(attrs={'class': 'form-control'}),
             'vehicleno': forms.TextInput(attrs={'class': 'form-control'}),
             'totalamt': forms.NumberInput(attrs={'class': 'form-control'}),
             'batavpercent': forms.NumberInput(attrs={'class': 'form-control'}),
             'batavamt': forms.NumberInput(attrs={'class': 'form-control'}),
             'dr': forms.NumberInput(attrs={'class': 'form-control'}),
             'dramt': forms.NumberInput(attrs={'class': 'form-control'}),
-            'qi': forms.NumberInput(attrs={'class': 'form-control'}),     # new field
+            'qi': forms.NumberInput(attrs={'class': 'form-control'}),
             'other': forms.NumberInput(attrs={'class': 'form-control'}),
             'total': forms.NumberInput(attrs={'class': 'form-control'}),
             'advance': forms.NumberInput(attrs={'class': 'form-control'}),
             'netamt': forms.NumberInput(attrs={'class': 'form-control'}),
-            'remark': forms.TextInput(attrs={'class': 'form-control'}),
+            'remark': forms.TextInput(attrs={'class': 'form-control', 'data-next': '#saveBtn'}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
-        # Optional: you can calculate netamt etc. if needed
         return cleaned_data
 
     def __init__(self, *args, **kwargs):
@@ -265,9 +269,8 @@ class PurchaseMasterForm(forms.ModelForm):
             self.fields['party'].queryset = HeadParty.objects.filter(org=self.current_org).order_by('partyname')
             self.fields['broker'].queryset = Broker.objects.filter(org=self.current_org).order_by('brokername')
 
-
 # --------------------- PURCHASE DETAILS FORM ---------------------
-class PurchaseDetailsForm(forms.ModelForm):
+class PurchaseDetailsForm(BlankZeroModelForm):
     item = forms.ModelChoiceField(
         queryset=HeadItem.objects.none(),
         empty_label="Select Item",
@@ -297,7 +300,6 @@ class PurchaseDetailsForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        # if amount not provided by JS, compute from qty*rate
         qty = cleaned_data.get('qty') or 0
         rate = cleaned_data.get('rate') or 0
         amount = cleaned_data.get('amount')
@@ -313,4 +315,10 @@ class PurchaseDetailsForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.current_org:
             self.fields['item'].queryset = HeadItem.objects.filter(org=self.current_org).order_by('item_name')
-            
+
+class AllPartyBalanceForm(forms.Form):
+    start_date = forms.DateField(widget=forms.DateInput(attrs={"type":"date"}))
+    end_date   = forms.DateField(widget=forms.DateInput(attrs={"type":"date"}))
+    party      = forms.ModelChoiceField(queryset=HeadParty.objects.none(),
+                                        required=False, empty_label="All")
+    report_type = forms.ChoiceField(choices=[("date", "Date Wise")], required=False)
