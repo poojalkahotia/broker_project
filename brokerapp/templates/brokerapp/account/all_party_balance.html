@@ -1,104 +1,96 @@
 {% extends 'brokerapp/base.html' %}
 {% load static %}
 {% block content %}
-<div class="container-fluid">
-  <div class="card shadow-sm">
+<div class="container-fluid d-flex justify-content-center">
+  <!-- Compact card since filters and totals removed -->
+  <div class="card shadow-sm" style="max-width:1000px; width:100%;">
     <div class="card-header text-white" style="background:#0b3d91;">
       <div class="d-flex justify-content-between align-items-center">
         <strong>All Party Balance</strong>
-        <span class="small">Filter & View Party Summary</span>
+        <span class="small">View Party Balances</span>
       </div>
     </div>
 
     <div class="card-body">
-      <form method="post" class="row g-2 align-items-end">
+      <!-- Only two buttons: Balance and Exit -->
+      <form method="post" class="d-flex justify-content-end gap-2 mb-3">
         {% csrf_token %}
-        <div class="col-12 col-md-3">
-          <label class="form-label">Start Date</label>
-          {{ form.start_date }}
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">End Date</label>
-          {{ form.end_date }}
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Party</label>
-          {{ form.party }}
-        </div>
-        <div class="col-12 col-md-2">
-          <label class="form-label">Report Type</label>
-          {{ form.report_type }}
-        </div>
-        <div class="col-12 col-md-1">
-          <button class="btn btn-primary w-100" style="background:#0b3d91;border-color:#0b3d91;">Filter</button>
-        </div>
+        <button type="submit" name="action" value="balance"
+                class="btn"
+                style="background:#0b3d91;border-color:#0b3d91;color:#fff;min-width:120px;">
+          Balance
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="history.back();" style="min-width:120px;">
+          Exit
+        </button>
       </form>
 
-      <div class="row mt-3">
-        <div class="col-lg-9">
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Party</th>
-                  <th class="text-end">Op Dr</th>
-                  <th class="text-end">Op Cr</th>
-                  <th class="text-end">Opening</th>
-                  <th class="text-end">Sale</th>
-                  <th class="text-end">Purchase</th>
-                  <th class="text-end">Naame</th>
-                  <th class="text-end">Jama</th>
-                  <th class="text-end">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-              {% if rows %}
-                {% for r in rows %}
-                <tr>
-                  <td>{{ r.party }}</td>
-                  <td class="text-end">{{ r.op_dr|floatformat:2 }}</td>
-                  <td class="text-end">{{ r.op_cr|floatformat:2 }}</td>
-                  <td class="text-end">{{ r.opening|floatformat:2 }}</td>
-                  <td class="text-end">{{ r.sale|floatformat:2 }}</td>
-                  <td class="text-end">{{ r.purchase|floatformat:2 }}</td>
-                  <td class="text-end">{{ r.naame|floatformat:2 }}</td>
-                  <td class="text-end">{{ r.jama|floatformat:2 }}</td>
-                  <td class="text-end fw-semibold">{{ r.balance|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-              {% else %}
-                <tr><td colspan="9" class="text-center text-muted py-4">No data for selected filters.</td></tr>
-              {% endif %}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary btn-sm">Print</button>
-            <button class="btn btn-outline-success btn-sm">Export Excel</button>
-            <button class="btn btn-outline-danger btn-sm">PDF</button>
-          </div>
-        </div>
-
-        <div class="col-lg-3">
-          <div class="card border-0" style="background:#f8f9fa;">
-            <div class="card-body">
-              <h6 class="mb-3" style="color:#0b3d91;">Overall Totals</h6>
-              <div class="small">
-                <div class="d-flex justify-content-between border-bottom py-1"><span>Total Op Dr:</span><strong>{{ totals.opdr|floatformat:2 }}</strong></div>
-                <div class="d-flex justify-content-between border-bottom py-1"><span>Total Op Cr:</span><strong>{{ totals.opcr|floatformat:2 }}</strong></div>
-                <div class="d-flex justify-content-between border-bottom py-1"><span>Sale:</span><strong>{{ totals.sale|floatformat:2 }}</strong></div>
-                <div class="d-flex justify-content-between border-bottom py-1"><span>Purchase:</span><strong>{{ totals.purchase|floatformat:2 }}</strong></div>
-                <div class="d-flex justify-content-between border-bottom py-1"><span>Naame:</span><strong>{{ totals.naame|floatformat:2 }}</strong></div>
-                <div class="d-flex justify-content-between border-bottom py-1"><span>Jama:</span><strong>{{ totals.jama|floatformat:2 }}</strong></div>
-                <div class="d-flex justify-content-between pt-2" style="color:#f5a623;"><span>Net Balance:</span><strong>{{ totals.balance|floatformat:2 }}</strong></div>
-              </div>
-              <div class="text-muted small mt-3">Report generated on {{ end }}</div>
-            </div>
-          </div>
-        </div>
+      {% if show_table %}
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle mb-3">
+          <thead class="table-light">
+            <tr>
+              <th>Party</th>
+              <th class="text-end">Op Dr</th>
+              <th class="text-end">Op Cr</th>
+              <th class="text-end">Opening</th>
+              <th class="text-end">Sale</th>
+              <th class="text-end">Purchase</th>
+              <th class="text-end">Naame</th>
+              <th class="text-end">Jama</th>
+              <th class="text-end">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if rows %}
+              {% for r in rows %}
+              <tr>
+                <td>{{ r.party.partyname|default:r.party }}</td>
+                <td class="text-end">{{ r.op_dr|floatformat:2 }}</td>
+                <td class="text-end">{{ r.op_cr|floatformat:2 }}</td>
+                <td class="text-end">{{ r.opening|floatformat:2 }}</td>
+                <td class="text-end">{{ r.sale|floatformat:2 }}</td>
+                <td class="text-end">{{ r.purchase|floatformat:2 }}</td>
+                <td class="text-end">{{ r.naame|floatformat:2 }}</td>
+                <td class="text-end">{{ r.jama|floatformat:2 }}</td>
+                <td class="text-end fw-semibold">
+                  <span class="{% if r.balance < 0 %}text-danger{% else %}text-dark{% endif %}">
+                    {{ r.balance|floatformat:2 }}
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="9" class="text-center text-muted py-4">No data available.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </div>
 
+      <!-- Buttons must POST to server — wrap them in a small POST form -->
+      <form method="post" class="d-flex gap-2" style="margin-bottom:0;">
+        {% csrf_token %}
+        <button type="submit" name="action" value="print"
+                class="btn btn-outline-secondary btn-sm">
+          Print
+        </button>
+
+        <button type="submit" name="action" value="export_excel"
+                class="btn btn-outline-success btn-sm">
+          Export Excel
+        </button>
+
+        <button type="submit" name="action" value="pdf"
+                class="btn btn-outline-danger btn-sm">
+          PDF
+        </button>
+      </form>
+
+      {% else %}
+      <div class="text-center text-muted py-4">
+        <em>Press <strong>Balance</strong> to view results.</em>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>

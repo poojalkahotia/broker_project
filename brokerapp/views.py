@@ -25,7 +25,7 @@ from django.views.generic import TemplateView
 from .forms import AllPartyBalanceForm
 from django.urls import reverse
 from urllib.parse import quote
-
+import io
 
 class PDF(FPDF):
     def header(self):
@@ -1641,72 +1641,174 @@ def daily_page_pdf(request):
 
 
 class AllPartyBalanceView(TemplateView):
+    """
+    Simplified AllPartyBalanceView matching compact template (no filters).
+    Supports POST actions via buttons with name="action":
+      - balance       : show table in page
+      - print         : render printable HTML (user can browser-print)
+      - export_excel  : return .xlsx (requires openpyxl)
+      - pdf           : return PDF generated with fpdf2
+    """
     template_name = "brokerapp/account/all_party_balance.html"
+    printable_template = "brokerapp/account/all_party_balance_printable.html"
 
+    # ---------- helpers ----------
     def _org_filter(self, qs):
-        """
-        Limit to current org if available in session.
-        Works even if the model doesn't have an 'org' attr by checking actual field names.
-        """
         org_id = self.request.session.get("org_id")
         if not org_id:
             return qs
-        # check model fields for org_id attname
         field_names = [f.attname for f in qs.model._meta.fields]
         if "org_id" in field_names:
             return qs.filter(org_id=org_id)
         return qs
 
-    def get(self, request, *args, **kwargs):
-        today = date.today()
-        form = AllPartyBalanceForm(initial={"start_date": today, "end_date": today})
-
-        # populate party dropdown (org-aware) — ORDER BY partyname (HeadParty PK = partyname)
-        org_id = request.session.get("org_id")
-        qs = HeadParty.objects.all().order_by("partyname")
-        if org_id:
-            # HeadParty has org FK named 'org' and attname 'org_id'
-            qs = qs.filter(org_id=org_id)
-        form.fields["party"].queryset = qs
-
-        ctx = self._build_context(form, today, today, None)
-        return self.render_to_response(ctx)
-
-    def post(self, request, *args, **kwargs):
-        form = AllPartyBalanceForm(request.POST)
-
-        # re-populate party dropdown on POST too (same logic as GET)
-        org_id = request.session.get("org_id")
-        qs = HeadParty.objects.all().order_by("partyname")
-        if org_id:
-            qs = qs.filter(org_id=org_id)
-        form.fields["party"].queryset = qs
-
-        if not form.is_valid():
-            today = date.today()
-            return self.render_to_response(self._build_context(form, today, today, None))
-
-        start = form.cleaned_data["start_date"]
-        end = form.cleaned_data["end_date"]
-        party = form.cleaned_data["party"]
-        return self.render_to_response(self._build_context(form, start, end, party))
-
     def _sum(self, qs, field):
         """Safe sum returning Decimal(0) when None."""
         return qs.aggregate(t=Sum(field))["t"] or Decimal("0")
 
-    def _build_context(self, form, start, end, party):
-        """
-        Build rows and totals.
-        Calculation per party:
-           Balance = (openingdebit - openingcredit + preStart(Sale - Purchase + Naame - Jama))
-                     + period(Sale - Purchase + Naame - Jama)
-        """
+    # ---------- GET ----------
+    def get(self, request, *args, **kwargs):
+        today = date.today()
+        ctx = self._build_context(start=today, end=today, party=None)
+        ctx["show_table"] = False
+        return self.render_to_response(ctx)
 
-        # parties ordered by partyname (HeadParty PK = partyname)
+    # ---------- POST ----------
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        today = date.today()
+
+        # Build rows/totals (same data used by all actions)
+        ctx = self._build_context(start=today, end=today, party=None)
+
+        # Balance -> show table in same template
+        if action == "balance" or not action:
+            ctx["show_table"] = True
+            return self.render_to_response(ctx)
+
+        # Print -> render printable HTML (no buttons)
+        if action == "print":
+            ctx["show_table"] = True
+            return render(request, self.printable_template, ctx)
+
+        # Export Excel -> create .xlsx (requires openpyxl)
+        if action == "export_excel":
+            try:
+                from openpyxl import Workbook
+                from openpyxl.utils import get_column_letter
+            except Exception:
+                return HttpResponse(
+                    "Required package 'openpyxl' not installed. Install with: pip install openpyxl",
+                    content_type="text/plain",
+                    status=500
+                )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "All Party Balance"
+
+            headers = ["Party", "Op Dr", "Op Cr", "Opening", "Sale", "Purchase", "Naame", "Jama", "Balance"]
+            ws.append(headers)
+
+            for r in ctx["rows"]:
+                pname = getattr(r["party"], "partyname", str(r["party"]))
+                ws.append([
+                    pname,
+                    float(r["op_dr"]), float(r["op_cr"]),
+                    float(r["opening"]), float(r["sale"]),
+                    float(r["purchase"]), float(r["naame"]),
+                    float(r["jama"]), float(r["balance"])
+                ])
+
+            # auto column width (simple)
+            for i, col in enumerate(ws.columns, start=1):
+                max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
+                ws.column_dimensions[get_column_letter(i)].width = max_len + 2
+
+            out = io.BytesIO()
+            wb.save(out)
+            out.seek(0)
+            resp = HttpResponse(
+                out.read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            resp["Content-Disposition"] = f'attachment; filename="all_party_balance_{today}.xlsx"'
+            return resp
+
+        # PDF -> generate using fpdf2
+        if action == "pdf":
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_auto_page_break(auto=True, margin=10)
+
+            # Header
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.cell(0, 10, "All Party Balance", ln=True, align="C")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.cell(0, 6, f"Generated on: {today.strftime('%d-%m-%Y')}", ln=True, align="C")
+            pdf.ln(4)
+
+            # Table headers
+            headers = ["Party", "Op Dr", "Op Cr", "Opening", "Sale", "Purchase", "Naame", "Jama", "Balance"]
+            col_widths = [50, 18, 18, 24, 18, 22, 18, 18, 22]  # total should fit A4 width with margins
+
+            pdf.set_font("Helvetica", "B", 9)
+            for i, h in enumerate(headers):
+                pdf.cell(col_widths[i], 8, h, border=1, align="C")
+            pdf.ln(8)
+
+            # Rows
+            pdf.set_font("Helvetica", "", 9)
+            for r in ctx["rows"]:
+                vals = [
+                    getattr(r["party"], "partyname", str(r["party"])),
+                    f"{r['op_dr']:.2f}", f"{r['op_cr']:.2f}",
+                    f"{r['opening']:.2f}", f"{r['sale']:.2f}",
+                    f"{r['purchase']:.2f}", f"{r['naame']:.2f}",
+                    f"{r['jama']:.2f}", f"{r['balance']:.2f}"
+                ]
+                for i, v in enumerate(vals):
+                    align = "L" if i == 0 else "R"
+                    pdf.cell(col_widths[i], 7, v, border=1, align=align)
+                pdf.ln(7)
+
+            # Totals row
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(col_widths[0], 8, "TOTAL", border=1, align="L")
+            totals = ctx["totals"]
+            total_vals = [
+                totals["opdr"], totals["opcr"], totals["sale"], totals["purchase"],
+                totals["naame"], totals["jama"], totals["balance"]
+            ]
+            # place totals aligned under numeric columns (skip party col)
+            # mapping to header indices: 1(OpDr),2(OpCr),3(Opening) etc. We'll print totals aligned with numeric columns.
+            # For simplicity, print totals under Op Dr onward; keep Opening blank since it's derived per-party.
+            pdf.cell(col_widths[1], 8, f"{totals['opdr']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[2], 8, f"{totals['opcr']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[3], 8, "", border=1, align="R")  # Opening total left blank
+            pdf.cell(col_widths[4], 8, f"{totals['sale']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[5], 8, f"{totals['purchase']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[6], 8, f"{totals['naame']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[7], 8, f"{totals['jama']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[8], 8, f"{totals['balance']:.2f}", border=1, align="R")
+            pdf.ln(10)
+
+            buf = io.BytesIO()
+            pdf.output(buf)
+            buf.seek(0)
+            resp = HttpResponse(buf.read(), content_type="application/pdf")
+            resp["Content-Disposition"] = f'attachment; filename="all_party_balance_{today}.pdf"'
+            return resp
+
+        # Unknown action -> render without table
+        ctx["show_table"] = False
+        return self.render_to_response(ctx)
+
+    # ---------- core calculation ----------
+    def _build_context(self, start, end, party):
+        # parties
         parties = HeadParty.objects.all().order_by("partyname")
         if party:
-            # party is a HeadParty instance; filter using partyname (PK)
             parties = parties.filter(partyname=party.partyname)
 
         rows = []
@@ -1717,66 +1819,37 @@ class AllPartyBalanceView(TemplateView):
             "balance": Decimal("0")
         }
 
-        # DailyPage selection for Naame/Jama
         dp_before = DailyPage.objects.filter(date__lt=start)
         dp_range = DailyPage.objects.filter(date__range=(start, end))
 
         org_id = self.request.session.get("org_id")
         if org_id:
-            # DailyPage has org FK -> attname org_id
             dp_before = dp_before.filter(org_id=org_id)
             dp_range = dp_range.filter(org_id=org_id)
+            parties = parties.filter(org_id=org_id)
 
         for p in parties:
-            # HeadParty uses openingdebit / openingcredit
             op_dr = Decimal(getattr(p, "openingdebit", 0) or 0)
             op_cr = Decimal(getattr(p, "openingcredit", 0) or 0)
 
-            # Pre-start totals (before start date)
-            sale_before = self._sum(
-                self._org_filter(SaleMaster.objects.filter(party=p, invdate__lt=start)),
-                "netamt"
-            )
-            purch_before = self._sum(
-                self._org_filter(PurchaseMaster.objects.filter(party=p, invdate__lt=start)),
-                "netamt"
-            )
-            naame_before = self._sum(
-                NaameEntry.objects.filter(daily_page__in=dp_before, party=p),
-                "amount"
-            )
-            jama_before = self._sum(
-                JamaEntry.objects.filter(daily_page__in=dp_before, party=p),
-                "amount"
-            )
+            sale_before = self._sum(self._org_filter(SaleMaster.objects.filter(party=p, invdate__lt=start)), "netamt")
+            purch_before = self._sum(self._org_filter(PurchaseMaster.objects.filter(party=p, invdate__lt=start)), "netamt")
+            naame_before = self._sum(NaameEntry.objects.filter(daily_page__in=dp_before, party=p), "amount")
+            jama_before = self._sum(JamaEntry.objects.filter(daily_page__in=dp_before, party=p), "amount")
 
             opening = (op_dr - op_cr) + (sale_before - purch_before + naame_before - jama_before)
 
-            # Period totals (start..end)
-            sale = self._sum(
-                self._org_filter(SaleMaster.objects.filter(party=p, invdate__range=(start, end))),
-                "netamt"
-            )
-            purchase = self._sum(
-                self._org_filter(PurchaseMaster.objects.filter(party=p, invdate__range=(start, end))),
-                "netamt"
-            )
-            naame = self._sum(
-                NaameEntry.objects.filter(daily_page__in=dp_range, party=p),
-                "amount"
-            )
-            jama = self._sum(
-                JamaEntry.objects.filter(daily_page__in=dp_range, party=p),
-                "amount"
-            )
+            sale = self._sum(self._org_filter(SaleMaster.objects.filter(party=p, invdate__range=(start, end))), "netamt")
+            purchase = self._sum(self._org_filter(PurchaseMaster.objects.filter(party=p, invdate__range=(start, end))), "netamt")
+            naame = self._sum(NaameEntry.objects.filter(daily_page__in=dp_range, party=p), "amount")
+            jama = self._sum(JamaEntry.objects.filter(daily_page__in=dp_range, party=p), "amount")
 
             balance = opening + sale - purchase + naame - jama
 
             rows.append({
-                "party": p,
-                "op_dr": op_dr, "op_cr": op_cr, "opening": opening,
-                "sale": sale, "purchase": purchase, "naame": naame, "jama": jama,
-                "balance": balance
+                "party": p, "op_dr": op_dr, "op_cr": op_cr, "opening": opening,
+                "sale": sale, "purchase": purchase, "naame": naame,
+                "jama": jama, "balance": balance
             })
 
             totals["opdr"] += op_dr
@@ -1787,4 +1860,210 @@ class AllPartyBalanceView(TemplateView):
             totals["jama"] += jama
             totals["balance"] += balance
 
-        return {"form": form, "rows": rows, "totals": totals, "start": start, "end": end}
+        return {"rows": rows, "totals": totals, "start": start, "end": end}
+
+def party_statement(request):
+    """
+    Party Statement — no date filters.
+    Select a party from dropdown and click 'Statement' to load its entries.
+    Uses:
+     - HeadParty.openingdebit / openingcredit
+     - SaleMaster.netamt (treated as Debit)
+     - PurchaseMaster.netamt (treated as Credit)
+     - NaameEntry.amount (Debit)
+     - JamaEntry.amount (Credit)
+    """
+    party_id = request.GET.get('party')  # using HeadParty.partyname as PK
+    parties = HeadParty.objects.order_by('partyname')
+    entries = []
+
+    if party_id:
+        head = get_object_or_404(HeadParty, pk=party_id)
+
+        # Opening
+        if head.openingdebit and head.openingdebit != Decimal('0'):
+            entries.append({
+                'entry_no': 'OPEN',
+                'date': None,
+                'debit': head.openingdebit,
+                'credit': Decimal('0'),
+                'remark': 'Opening (Dr)'
+            })
+        elif head.openingcredit and head.openingcredit != Decimal('0'):
+            entries.append({
+                'entry_no': 'OPEN',
+                'date': None,
+                'debit': Decimal('0'),
+                'credit': head.openingcredit,
+                'remark': 'Opening (Cr)'
+            })
+
+        # Sales -> Debit
+        for s in SaleMaster.objects.filter(party=head).order_by('invdate'):
+            entries.append({
+                'entry_no': s.invno,
+                'date': s.invdate,
+                'debit': s.netamt,
+                'credit': Decimal('0'),
+                'remark': s.remark or f"Sale Inv#{s.invno}"
+            })
+
+        # Purchases -> Credit
+        for p in PurchaseMaster.objects.filter(party=head).order_by('invdate'):
+            entries.append({
+                'entry_no': p.invno,
+                'date': p.invdate,
+                'debit': Decimal('0'),
+                'credit': p.netamt,
+                'remark': p.remark or f"Purchase Inv#{p.invno}"
+            })
+
+        # Naame entries -> Debit
+        for n in NaameEntry.objects.filter(party=head).order_by('daily_page__date'):
+            entries.append({
+                'entry_no': n.entry_no,
+                'date': n.daily_page.date,
+                'debit': n.amount,
+                'credit': Decimal('0'),
+                'remark': n.remark or 'Naame'
+            })
+
+        # Jama entries -> Credit
+        for j in JamaEntry.objects.filter(party=head).order_by('daily_page__date'):
+            entries.append({
+                'entry_no': j.entry_no,
+                'date': j.daily_page.date,
+                'debit': Decimal('0'),
+                'credit': j.amount,
+                'remark': j.remark or 'Jama'
+            })
+
+        # Sort entries by date (opening has date None)
+        entries = sorted(entries, key=lambda x: (x['date'] is None, x['date'] or ''))
+
+        # totals + running balance
+        total_debit = sum(e['debit'] for e in entries)
+        total_credit = sum(e['credit'] for e in entries)
+        bal = Decimal('0')
+        for e in entries:
+            bal += (e['debit'] or Decimal('0')) - (e['credit'] or Decimal('0'))
+            e['balance'] = bal
+
+        balance = total_debit - total_credit
+
+    else:
+        head = None
+        total_debit = total_credit = balance = Decimal('0')
+
+    return render(request, 'brokerapp/account/party_statement.html', {
+        'parties': parties,
+        'selected': head,
+        'entries': entries,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        'balance': balance,
+    })
+    
+def broker_statement(request):
+    """
+    Broker statement built from multiple models that reference Broker:
+      - JamaEntry  => treated as CREDIT (money received)
+      - NaameEntry => treated as DEBIT  (money paid)
+      - SaleMaster => uses 'dramt' as DEBIT by default (adjust if needed)
+      - PurchaseMaster => uses 'dramt' as CREDIT by default (adjust if needed)
+
+    If any mapping is different for your business logic, update the mapping lines below.
+    """
+    brokers = Broker.objects.all().order_by('brokername')
+    selected = None
+    entries = []
+    total_debit = total_credit = 0.0
+    balance = 0.0
+
+    broker_key = request.GET.get('broker')  # brokername is primary_key on Broker
+    if broker_key:
+        selected = get_object_or_404(Broker, brokername=broker_key)
+
+        # 1) JamaEntry -> treat as CREDIT (amount credited to account)
+        jama_qs = JamaEntry.objects.filter(broker=selected).order_by('created_at')
+        for j in jama_qs:
+            date_val = j.created_at.date() if getattr(j, 'created_at', None) else None
+            amount = float(j.amount or 0)
+            entries.append({
+                'entry_no': f"J-{j.entry_no}",
+                'date': date_val,
+                'debit': 0.0,
+                'credit': amount,
+                'remark': (j.remark or '') + f" (Jama)",
+            })
+
+        # 2) NaameEntry -> treat as DEBIT (amount paid)
+        naame_qs = NaameEntry.objects.filter(broker=selected).order_by('created_at')
+        for n in naame_qs:
+            date_val = n.created_at.date() if getattr(n, 'created_at', None) else None
+            amount = float(n.amount or 0)
+            entries.append({
+                'entry_no': f"N-{n.entry_no}",
+                'date': date_val,
+                'debit': amount,
+                'credit': 0.0,
+                'remark': (n.remark or '') + f" (Naame)",
+            })
+
+        # 3) SaleMaster -> default: use dramt as DEBIT (broker charge). Change if business logic differs.
+        sale_qs = SaleMaster.objects.filter(broker=selected).order_by('invdate')
+        for s in sale_qs:
+            date_val = getattr(s, 'invdate', None)
+            # prefer dramt (dalali amount). If you want different field, change below.
+            amt = float(getattr(s, 'dramt', 0) or 0)
+            # If your SaleMaster stores dalali differently (e.g. 'dr' or 'dramt'), adjust here.
+            entries.append({
+                'entry_no': f"S-{getattr(s, 'invno', '')}",
+                'date': date_val,
+                'debit': amt,
+                'credit': 0.0,
+                'remark': (getattr(s, 'remark', '') or '') + f" (Sale)",
+            })
+
+        # 4) PurchaseMaster -> default: use dramt as CREDIT (adjust if needed)
+        purchase_qs = PurchaseMaster.objects.filter(broker=selected).order_by('invdate')
+        for p in purchase_qs:
+            date_val = getattr(p, 'invdate', None)
+            amt = float(getattr(p, 'dramt', 0) or 0)
+            entries.append({
+                'entry_no': f"P-{getattr(p, 'invno', '')}",
+                'date': date_val,
+                'debit': 0.0,
+                'credit': amt,
+                'remark': (getattr(p, 'remark', '') or '') + f" (Purchase)",
+            })
+
+        # Sort combined entries by date (None last) then by entry_no
+        # Convert None dates to far future for stable sort
+        def _date_key(item):
+            d = item.get('date')
+            return (d or datetime.max.date(), item.get('entry_no'))
+
+        entries.sort(key=_date_key)
+
+        # Compute totals and running balance (balance = previous + debit - credit)
+        total_debit = sum(item['debit'] for item in entries)
+        total_credit = sum(item['credit'] for item in entries)
+        running = 0.0
+        for item in entries:
+            running += (item['debit'] - item['credit'])
+            # attach running balance to item for template
+            item['balance'] = running
+
+        balance = running
+
+    context = {
+        'brokers': brokers,
+        'selected': selected,
+        'entries': entries,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        'balance': balance,
+    }
+    return render(request, 'brokerapp/account/broker_statement.html', context)
+    

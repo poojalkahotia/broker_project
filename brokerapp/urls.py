@@ -64,6 +64,9 @@ urlpatterns = [
     
     # Accounts
     path("account/all-party-balance/", views.AllPartyBalanceView.as_view(), name="all_party_balance"),
+    path('account/party-statement/', views.party_statement, name='party_statement'),
+    path('account/broker-statement/', views.broker_statement, name='broker_statement'),
+    
 ]
 
 

@@ -1,0 +1,103 @@
+{% extends 'brokerapp/base.html' %}
+{% load static %}
+{% block content %}
+
+<div class="container-fluid p-2">
+  <div class="card shadow-sm">
+    <div class="card-header party-stmt-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Party Statement</h6>
+
+        <form method="get" class="d-flex align-items-center">
+          <select name="party" class="form-select form-select-sm me-2" aria-label="Select party">
+            <option value="">-- Select Party --</option>
+            {% for p in parties %}
+              <option value="{{ p.partyname }}" {% if selected and selected.partyname == p.partyname %}selected{% endif %}>
+                {{ p.partyname }}
+              </option>
+            {% endfor %}
+          </select>
+
+          <button type="submit" class="btn btn-sm btn-stmt">Statement</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 party-stmt-table">
+          <colgroup>
+            <!-- optimized widths: small numeric columns, larger remark, balance fixed -->
+            <col style="width:12%;">
+            <col style="width:13%;">
+            <col style="width:13%;">
+            <col style="width:13%;">
+            <col style="width:29%;">  <!-- remark -->
+            <col style="width:20%;">  <!-- balance -->
+          </colgroup>
+
+          <thead class="table-light small text-center align-middle">
+            <tr>
+              <th>Entry No</th>
+              <th>Date</th>
+              <th class="text-end">Debit</th>
+              <th class="text-end">Credit</th>
+              <th class="remark">Remark</th>
+              <th class="text-end">Balance</th>
+            </tr>
+          </thead>
+
+          <tbody class="small">
+            {% if entries %}
+              {% for e in entries %}
+                <tr>
+                  <td class="align-middle text-center">
+                    {% if e.entry_no != 'OPEN' %}{{ e.entry_no }}{% endif %}
+                  </td>
+
+                  <td class="align-middle text-center">
+                    {% if e.date %}{{ e.date|date:'Y-m-d' }}{% endif %}
+                  </td>
+
+                  <td class="align-middle text-end">
+                    <span class="cell-num">{% if e.debit %}{{ e.debit|floatformat:2 }}{% else %}0.00{% endif %}</span>
+                  </td>
+
+                  <td class="align-middle text-end">
+                    <span class="cell-num">{% if e.credit %}{{ e.credit|floatformat:2 }}{% else %}0.00{% endif %}</span>
+                  </td>
+
+                  <td class="align-middle remark text-start">
+                    <span class="cell-remark">{{ e.remark|default_if_none:"" }}</span>
+                  </td>
+
+                  <td class="align-middle text-end">
+                    <span class="cell-num">{{ e.balance|floatformat:2 }}</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="text-center text-muted py-3">
+                  Select a party and click <strong>Statement</strong> to view details.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+
+          <tfoot class="table-light small fw-semibold">
+            <tr>
+              <th colspan="2" class="text-start">Total</th>
+              <th class="text-end">{{ total_debit|floatformat:2 }}</th>
+              <th class="text-end">{{ total_credit|floatformat:2 }}</th>
+              <th></th>
+              <th class="text-end">{{ balance|floatformat:2 }}</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

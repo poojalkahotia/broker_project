@@ -1,5 +1,9 @@
 /* ===== broker_project — custom.css (cleaned) ===== */
 
+ /* ===== broker_project — custom.css (cleaned) ===== */
+
+
+
 /* --- Navbar / common --- */
 .navbar-custom {
   background-color: #f8f9fa;
@@ -156,3 +160,117 @@ input[type="number"]::-webkit-outer-spin-button {
   vertical-align: middle;
 }
 
+/* =========================
+   Party Statement — final CSS
+   Path: brokerapp/static/brokerapp/theme.css
+   Replace any previous .party-stmt-table block with this exact block.
+   ========================= */
+
+.party-stmt-table {
+  width: 100%;
+  table-layout: fixed;         /* use fixed layout so colgroup widths remain stable */
+  border-collapse: collapse;
+  font-size: 0.94rem;
+  color: #222;
+}
+
+/* Base cell styling */
+.party-stmt-table th,
+.party-stmt-table td {
+  padding: 8px 10px;
+  vertical-align: middle;
+  word-break: break-word;
+  white-space: normal;
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+/* Header */
+.party-stmt-table thead {
+  background-color: #0b3d91;   /* navy */
+  color: #fff;
+}
+.party-stmt-table thead th {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* Alternating rows and hover */
+.party-stmt-table tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+.party-stmt-table tbody tr:hover {
+  background-color: rgba(245,166,35,0.06); /* subtle golden hover */
+}
+
+/* Numeric columns (Debit / Credit / Balance) */
+.party-stmt-table td.text-end,
+.party-stmt-table th.text-end {
+  white-space: nowrap;        /* keep numbers on one line */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 16px;        /* gap between number and next column */
+  text-align: right;
+  font-feature-settings: "tnum"; /* use tabular numbers if available */
+}
+
+/* Extra safety — make numeric spans block to avoid inline spill */
+.party-stmt-table td .cell-num {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 6px;
+}
+
+/* Remark column: left aligned, wraps safely and keeps distance from Credit */
+.party-stmt-table th.remark,
+.party-stmt-table td.remark {
+  text-align: left;
+  padding-left: 2px !important;   /* change here: smaller gap under the 'R' */
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* remark span styling */
+.party-stmt-table td .cell-remark {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
+  padding-left: 0;               /* change here: remove earlier 4px */
+  margin-left: 0;
+}
+
+/* Footer row styling */
+.party-stmt-table tfoot th,
+.party-stmt-table tfoot td {
+  font-weight: 700;
+  background-color: #fafafa;
+  border-top: 2px solid rgba(0,0,0,0.06);
+}
+
+/* Small screen adjustments */
+@media (max-width: 768px) {
+  .party-stmt-table th,
+  .party-stmt-table td {
+    padding: 6px 8px;
+    font-size: 0.86rem;
+  }
+  .party-stmt-table td.remark {
+    max-height: 6rem;
+    overflow: hidden;
+  }
+}
+
+/* Tiny screens: keep layout tidy; consider stacked cards later if needed */
+@media (max-width: 420px) {
+  .party-stmt-table {
+    font-size: 0.82rem;
+  }
+  .party-stmt-table td.text-end {
+    padding-right: 10px;
+  }
+  .party-stmt-table th.remark,
+  .party-stmt-table td.remark {
+    padding-left: 10px;
+  }
+}

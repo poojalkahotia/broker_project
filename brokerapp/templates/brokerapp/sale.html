@@ -216,8 +216,8 @@
     <div class="col-md-auto" style="width:80px;">
         <label class="form-label mb-1">LotNo</label>
         <!-- Enter on this will jump to Add button -->
-        <input type="text" id="lotno" class="form-control form-control-sm"
-                maxlength="50" data-next="#addItemBtn">
+        <input type="text" id="lotno" name="lotno" class="form-control form-control-sm lotno"
+               maxlength="50" data-next="#addItemBtn">
     </div>
 
     <!-- Add Button -->
@@ -300,13 +300,20 @@
                             readonly value="{{ sale.dramt|default_if_none:'' }}">
                     </div>
 
-                    <!-- QI -->
+                    
+                    <!-- QI per-lot (user enters per-lot value) -->
+                    
                     <div class="d-flex align-items-center justify-content-end mb-2">
-                        <label class="form-label me-2 mb-0">QI:</label>
-                        <input type="number" step="any" id="qi" name="qi"
-                            class="form-control text-end w-50"
-                            value="{{ sale.qi|default_if_none:'' }}">
+                        <label class="form-label me-2 mb-0">QI per Lot:</label>
+                        <input type="number" step="any" id="qi_per" name="qi_per"
+                            class="form-control text-end w-25 me-2"
+                            value="0.00">
+
+                        <input type="number" step="any" id="qi_total" name="qi"
+                            class="form-control text-end w-25"
+                            readonly value="0.00">
                     </div>
+
 
                     <!-- Other -->
                     <div class="d-flex align-items-center justify-content-end mb-2">
@@ -416,15 +423,24 @@ function computeQtyAndAmountAndUpdateUI(){
 
 /* ===== Update Summary ===== */
 function updateSummary(){
-    let totalamt = 0; 
+    let totalamt = 0;
     itemsArray.forEach(it => totalamt += Number(it.amt||0));
     setVal('totalamt', totalamt);
 
-    const batavamt = totalamt * (getFloat('batavpercent')/100); setVal('batavamt', batavamt);
-    const dramt = totalamt * (getFloat('dr')/100); setVal('dramt', dramt);
+    // Batav remains percentage-based
+    const batavamt = totalamt * (getFloat('batavpercent') / 100);
+    setVal('batavamt', batavamt);
 
+    // Dalali: interpret 'dr' as per-unit dalali and multiply by total quantity across items
+    let totalQty = 0;
+    itemsArray.forEach(it => { totalQty += Number(it.qty || 0); });
+    const drPerUnit = getFloat('dr'); // user-entered dalali per unit
+    const dramt = drPerUnit * totalQty;
+    setVal('dramt', dramt);
+
+    // Final totals (include QI and Other as before)
     const total = totalamt - batavamt - dramt - getFloat('qi') - getFloat('other');
-    setVal('total', total); 
+    setVal('total', total);
     setVal('netamt', total - getFloat('advance'));
 
     // Update hidden JSON before submit
@@ -474,20 +490,31 @@ function updateUI() {
 
 /* ===== Reset Form Fields ===== */
 function resetAddFormFields(){
-    // Clear select and text inputs explicitly
+    // Clear select and LotNo explicitly
     const sel = document.getElementById('itemSelect');
     if (sel) sel.value = '';
-    document.getElementById('lotno').value = '';
+    const lotEl = document.getElementById('lotno');
+    if (lotEl) lotEl.value = '';
 
-    // Reset numeric inputs using setVal (formats to 2 decimals)
-    ['bora','bn','bnwt','bo','bowt','tbwt','qty','rate','lineAmount','partywt','millwt','diffwt'].forEach(id=>{
+    // Editable numeric inputs: make them blank for easy user entry
+    ['bora','bn','bnwt','bo','bowt','partywt','millwt','rate'].forEach(id=>{
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+    });
+
+    // Computed / readonly fields: keep them as formatted 0.00 using setVal
+    ['tbwt','qty','lineAmount','diffwt'].forEach(id=>{
         setVal(id, 0);
     });
 
     editingIndex = null;
     const btn = document.getElementById('addItemBtn');
-    if(btn){ btn.textContent='Add'; btn.classList.remove('btn-primary'); btn.classList.add('btn-success'); }
- }
+    if(btn){
+        btn.textContent = 'Add';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-success');
+    }
+}
 
 
 /* ===== Add / Update Item ===== */
@@ -667,6 +694,32 @@ function editItem(idx){
         }
     });
 
+    /* ===== QI Auto Calculation ===== */
+    const qiPerInput = document.getElementById('qi_per');
+    const qiTotalInput = document.getElementById('qi_total');
+    const itemsBody = document.getElementById('addedItemsTableBody');
+
+    function updateQI(){
+        if(!qiPerInput || !qiTotalInput || !itemsBody) return;
+        const perLot = parseFloat(qiPerInput.value) || 0;
+        const lotCount = itemsBody.querySelectorAll('tr').length;
+        const total = perLot * lotCount;
+        qiTotalInput.value = total.toFixed(2);
+        updateSummary();
+    }
+
+    if(qiPerInput){
+        qiPerInput.addEventListener('input', updateQI);
+    }
+
+    const qiObserver = new MutationObserver(updateQI);
+    if(itemsBody){
+        qiObserver.observe(itemsBody, {childList: true});
+    }
+
+    updateQI();
+
+    
 });
 
 </script>
