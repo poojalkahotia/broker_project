@@ -8,18 +8,22 @@
       <div class="d-flex justify-content-between align-items-center">
         <h6 class="mb-0">Party Statement</h6>
 
-        <form method="get" class="d-flex align-items-center">
-          <select name="party" class="form-select form-select-sm me-2" aria-label="Select party">
+        {# Header: only party select + Statement button #}
+        <form method="post" class="d-flex align-items-center">
+          {% csrf_token %}
+          <select name="party" id="party-select" class="form-select form-select-sm me-2" aria-label="Select party" required>
             <option value="">-- Select Party --</option>
             {% for p in parties %}
-              <option value="{{ p.partyname }}" {% if selected and selected.partyname == p.partyname %}selected{% endif %}>
+              <option value="{{ p.pk }}" {% if selected and selected.pk == p.pk %}selected{% endif %}>
                 {{ p.partyname }}
               </option>
             {% endfor %}
           </select>
 
-          <button type="submit" class="btn btn-sm btn-stmt">Statement</button>
+          <!-- Statement button -->
+          <button type="submit" name="action" value="statement" class="btn btn-sm btn-stmt">Statement</button>
         </form>
+
       </div>
     </div>
 
@@ -27,13 +31,12 @@
       <div class="table-responsive">
         <table class="table table-sm table-hover mb-0 party-stmt-table">
           <colgroup>
-            <!-- optimized widths: small numeric columns, larger remark, balance fixed -->
             <col style="width:12%;">
             <col style="width:13%;">
             <col style="width:13%;">
             <col style="width:13%;">
-            <col style="width:29%;">  <!-- remark -->
-            <col style="width:20%;">  <!-- balance -->
+            <col style="width:29%;">
+            <col style="width:20%;">
           </colgroup>
 
           <thead class="table-light small text-center align-middle">
@@ -97,7 +100,65 @@
         </table>
       </div>
     </div>
+
+    <!-- Footer: Print / Export Excel / PDF (mirrors All Party Balance placement) -->
+    <div class="card-footer bg-white">
+      <div class="d-flex gap-2">
+        <!-- Print -->
+        <form method="post" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="party" class="footer-party" value="{% if selected %}{{ selected.pk }}{% endif %}">
+          <button type="submit" name="action" value="print" class="btn btn-outline-secondary">Print</button>
+        </form>
+
+        <!-- Export Excel (outline -> shows green on hover) -->
+        <form method="post" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="party" class="footer-party" value="{% if selected %}{{ selected.pk }}{% endif %}">
+          <button type="submit" name="action" value="export_excel" class="btn btn-outline-success">Export Excel</button>
+        </form>
+
+
+        <!-- PDF -->
+        <form method="post" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="party" class="footer-party" value="{% if selected %}{{ selected.pk }}{% endif %}">
+          <button type="submit" name="action" value="pdf" class="btn btn-outline-danger">PDF</button>
+        </form>
+      </div>
+    </div>
+
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const select = document.getElementById('party-select');
+  if(!select) return;
+  const footerInputs = document.querySelectorAll('input.footer-party');
+
+  // Copy current selection into footer hidden inputs on load
+  footerInputs.forEach(inp => inp.value = select.value || '');
+
+  // Update footer hidden inputs whenever user changes select
+  select.addEventListener('change', function(){
+    footerInputs.forEach(inp => inp.value = select.value || '');
+  });
+
+  // As a UX convenience, if user clicks a footer button without selecting, prevent submit and show simple alert
+  const footerForms = document.querySelectorAll('.card-footer form');
+  footerForms.forEach(form => {
+    form.addEventListener('submit', function(e){
+      const p = form.querySelector('input.footer-party');
+      if(!p || !p.value){
+        e.preventDefault();
+        alert('Please select a party first.');
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

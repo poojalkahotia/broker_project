@@ -194,6 +194,13 @@
         <input type="number" id="diffwt" class="form-control form-control-sm text-end" readonly>
     </div>
 
+    <!-- FrkWt (new) -->
+    <div class="col-md-auto" style="width:60px;">
+        <label class="form-label mb-1">FrkWt</label>
+        <input type="number" id="frkwt" class="form-control form-control-sm text-end"
+               step="any" value="0" oninput="computeQtyAndAmountAndUpdateUI()">
+    </div>
+
     <!-- Qty -->
     <div class="col-md-auto" style="width:70px;">
         <label class="form-label mb-1">Qty</label>
@@ -244,6 +251,7 @@
                     <th style="display:none;">BOWt</th>
                     <th>TBwt</th>
                     <th>Qty</th>
+                    <th>FrkWt</th>
                     <th>Rate</th>
                     <th>Amount</th>
                     <th>PartyWt</th>
@@ -398,15 +406,17 @@ function computeQtyAndAmountAndUpdateUI(){
     const partywt = getFloat('partywt');
     const millwt = getFloat('millwt');
     const rate = getFloat('rate');
+    const frkwt = getFloat('frkwt'); // <-- new: read FrkWt entered by user
 
     // Difference Weight (party - mill)
     const diff = partywt - millwt;
     setVal('diffwt', diff);
 
     // Qty = min(PWt, MWt) - TBWt (TBWt = totalBora). Never below 0.
+    // Qty = min(PWt, MWt) - TBWt - FrkWt. Never below 0.
     const tbwt = Number(totalBora) || 0;
     const minWt = Math.min(Number(partywt) || 0, Number(millwt) || 0);
-    const qty = Math.max(0, minWt - tbwt);
+    const qty = Math.max(0, minWt - tbwt - frkwt);
     setVal('qty', qty);
     
     // Amount calculation: keep existing 0.01 factor (project-specific).
@@ -466,6 +476,7 @@ function updateUI() {
             <td style="display:none;">${it.bowt}</td>
             <td>${Number(it.tbwt || 0).toFixed(2)}</td>
             <td>${Number(it.qty).toFixed(2)}</td>
+            <td>${Number(it.frkwt || 0).toFixed(2)}</td>
             <td>${Number(it.rate).toFixed(2)}</td>
             <td class="text-end">${Number(it.amt).toFixed(2)}</td>
             <td>${Number(it.partywt).toFixed(2)}</td>
@@ -497,7 +508,7 @@ function resetAddFormFields(){
     if (lotEl) lotEl.value = '';
 
     // Editable numeric inputs: make them blank for easy user entry
-    ['bora','bn','bnwt','bo','bowt','partywt','millwt','rate'].forEach(id=>{
+    ['bora','bn','bnwt','bo','bowt','partywt','millwt','frkwt','rate'].forEach(id=>{
         const el = document.getElementById(id);
         if(el) el.value = '';
     });
@@ -527,6 +538,7 @@ document.getElementById('addItemBtn').addEventListener('click', function(){
     const bora = getFloat('bora'), bn = getFloat('bn'), bnwt = getFloat('bnwt'),
           bo = getFloat('bo'), bowt = getFloat('bowt'),
           partywt = getFloat('partywt'), millwt = getFloat('millwt'), rate = getFloat('rate'),
+          frkwt = getFloat('frkwt'),
           lotno = document.getElementById('lotno').value || '';
 
     const {qty, amount} = computeQtyAndAmountAndUpdateUI();
@@ -544,6 +556,8 @@ document.getElementById('addItemBtn').addEventListener('click', function(){
         qty,
         rate,
         amt: amount,
+        frkwt,
+
         partywt,
         millwt,
         diffwt: partywt - millwt,
@@ -602,6 +616,7 @@ function editItem(idx){
     setVal('partywt', it.partywt);
     setVal('millwt', it.millwt);
     setVal('diffwt', it.diffwt);
+    setVal('frkwt', it.frkwt); // <-- new
     document.getElementById('lotno').value = it.lotno;
 
     const btn = document.getElementById('addItemBtn');
@@ -648,7 +663,7 @@ function editItem(idx){
             });
         }
         // Move focus on Enter for compact item entry order
-        const order = ['bnwt','bo','bowt','tbwt','partywt','millwt','rate'];
+        const order = ['bnwt','bo','bowt','tbwt','partywt','millwt','frkwt','rate'];
         order.forEach((id, idx)=>{
             const el = document.getElementById(id);
             if(el){
@@ -681,7 +696,7 @@ function editItem(idx){
 
     // Also update summary when numeric fields that affect line amount change
     // (in case user types directly into party/mill/rate without leaving field)
-    ['partywt','millwt','rate','bn','bnwt','bo','bowt','tbwt'].forEach(id => {
+    ['partywt','millwt','frkwt','rate','bn','bnwt','bo','bowt','tbwt'].forEach(id => {
         const el = document.getElementById(id);
         if(el){
             el.addEventListener('input', function(){

@@ -1,0 +1,66 @@
+{% extends "brokerapp/base.html" %}
+{% load static %}
+{% block content %}
+<div class="container-fluid">
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-3">
+      <div class="text-center mb-2">
+        <h5 class="mb-0">Party Statement{% if selected %} — {{ selected.partyname }}{% endif %}</h5>
+        <small class="text-muted">Report generated on {% if now %}{{ now }}{% else %}{{ today|default:None }}{% endif %}</small>
+      </div>
+
+      {% if entries %}
+      <div class="table-responsive mt-3">
+        <table class="table table-sm table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Entry No</th>
+              <th class="text-center">Date</th>
+              <th class="text-end">Debit</th>
+              <th class="text-end">Credit</th>
+              <th>Remark</th>
+              <th class="text-end">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+            <tr>
+              <td class="text-center">{% if e.entry_no != 'OPEN' %}{{ e.entry_no }}{% endif %}</td>
+              <td class="text-center">{% if e.date %}{{ e.date|date:"Y-m-d" }}{% endif %}</td>
+              <td class="text-end">{{ e.debit|default:0|floatformat:2 }}</td>
+              <td class="text-end">{{ e.credit|default:0|floatformat:2 }}</td>
+              <td class="">{{ e.remark|default_if_none:"" }}</td>
+              <td class="text-end">
+                <span class="{% if e.balance < 0 %}text-danger{% else %}text-dark{% endif %}">{{ e.balance|default:0|floatformat:2 }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+
+          <tfoot class="table-light small fw-semibold">
+            <tr>
+              <th colspan="2" class="text-start">Total</th>
+              <th class="text-end">{{ total_debit|default:0|floatformat:2 }}</th>
+              <th class="text-end">{{ total_credit|default:0|floatformat:2 }}</th>
+              <th></th>
+              <th class="text-end">{{ balance|default:0|floatformat:2 }}</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center text-muted py-4">
+        <em>No entries to display.</em>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- auto-print if opened in new tab (optional) -->
+<script>
+  try {
+    if (!window.opener) window.print();
+  } catch(e){}
+</script>
+{% endblock %}

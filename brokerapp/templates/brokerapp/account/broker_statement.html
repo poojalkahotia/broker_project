@@ -8,18 +8,22 @@
       <div class="d-flex justify-content-between align-items-center">
         <h6 class="mb-0">Broker Statement</h6>
 
-        <form method="get" class="d-flex align-items-center">
-          <select name="broker" class="form-select form-select-sm me-2" aria-label="Select broker">
+        {# Header: only broker select + Statement button #}
+        <form method="post" class="d-flex align-items-center">
+          {% csrf_token %}
+          <select name="broker" id="broker-select" class="form-select form-select-sm me-2" aria-label="Select broker" required>
             <option value="">-- Select Broker --</option>
             {% for b in brokers %}
-              <option value="{{ b.brokername }}" {% if selected and selected.brokername == b.brokername %}selected{% endif %}>
+              <option value="{{ b.pk }}" {% if selected and selected.pk == b.pk %}selected{% endif %}>
                 {{ b.brokername }}
               </option>
             {% endfor %}
           </select>
 
-          <button type="submit" class="btn btn-sm btn-stmt">Statement</button>
+          <!-- Statement button -->
+          <button type="submit" name="action" value="statement" class="btn btn-sm btn-stmt">Statement</button>
         </form>
+
       </div>
     </div>
 
@@ -97,7 +101,64 @@
         </table>
       </div>
     </div>
+
+    <!-- Footer: Print / Export Excel / PDF (mirrors All Party Balance placement) -->
+    <div class="card-footer bg-white">
+      <div class="d-flex gap-2">
+        <!-- Print -->
+        <form method="post" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="broker" class="footer-broker" value="{% if selected %}{{ selected.pk }}{% endif %}">
+          <button type="submit" name="action" value="print" class="btn btn-outline-secondary">Print</button>
+        </form>
+
+        <!-- Export Excel (outline -> shows green on hover) -->
+        <form method="post" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="broker" class="footer-broker" value="{% if selected %}{{ selected.pk }}{% endif %}">
+          <button type="submit" name="action" value="export_excel" class="btn btn-outline-success">Export Excel</button>
+        </form>
+
+        <!-- PDF -->
+        <form method="post" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="broker" class="footer-broker" value="{% if selected %}{{ selected.pk }}{% endif %}">
+          <button type="submit" name="action" value="pdf" class="btn btn-outline-danger">PDF</button>
+        </form>
+      </div>
+    </div>
+
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const select = document.getElementById('broker-select');
+  if(!select) return;
+  const footerInputs = document.querySelectorAll('input.footer-broker');
+
+  // Copy current selection into footer hidden inputs on load
+  footerInputs.forEach(inp => inp.value = select.value || '');
+
+  // Update footer hidden inputs whenever user changes select
+  select.addEventListener('change', function(){
+    footerInputs.forEach(inp => inp.value = select.value || '');
+  });
+
+  // As a UX convenience, if user clicks a footer button without selecting, prevent submit and show simple alert
+  const footerForms = document.querySelectorAll('.card-footer form');
+  footerForms.forEach(form => {
+    form.addEventListener('submit', function(e){
+      const p = form.querySelector('input.footer-broker');
+      if(!p || !p.value){
+        e.preventDefault();
+        alert('Please select a broker first.');
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

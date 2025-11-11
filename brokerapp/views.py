@@ -27,6 +27,13 @@ from django.urls import reverse
 from urllib.parse import quote
 import io
 
+try:
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+except Exception:
+    Workbook = None
+    get_column_letter = None
+
 class PDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 14)
@@ -1862,208 +1869,474 @@ class AllPartyBalanceView(TemplateView):
 
         return {"rows": rows, "totals": totals, "start": start, "end": end}
 
-def party_statement(request):
+# ---------- original party_statement (uses helper) ----------
+class PartyStatementView(TemplateView):
     """
-    Party Statement — no date filters.
-    Select a party from dropdown and click 'Statement' to load its entries.
-    Uses:
-     - HeadParty.openingdebit / openingcredit
-     - SaleMaster.netamt (treated as Debit)
-     - PurchaseMaster.netamt (treated as Credit)
-     - NaameEntry.amount (Debit)
-     - JamaEntry.amount (Credit)
+    Single URL Party Statement view. Buttons POST with name="action":
+     - statement      : show table
+     - print          : render printable HTML
+     - export_excel   : return .xlsx
+     - pdf            : return PDF (fpdf)
     """
-    party_id = request.GET.get('party')  # using HeadParty.partyname as PK
-    parties = HeadParty.objects.order_by('partyname')
-    entries = []
+    template_name = "brokerapp/account/party_statement.html"
+    printable_template = "brokerapp/account/party_statement_printable.html"
 
-    if party_id:
+    def get(self, request, *args, **kwargs):
+        parties = HeadParty.objects.order_by("partyname")
+        ctx = {
+            "parties": parties,
+            "selected": None,
+            "entries": [],
+            "total_debit": Decimal("0"),
+            "total_credit": Decimal("0"),
+            "balance": Decimal("0"),
+        }
+        return self.render_to_response(ctx)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Process POST actions. Always returns an HttpResponse.
+        """
+        action = request.POST.get("action")
+        # handle both header POST (party in POST) or fallback to GET param
+        party_id = request.POST.get("party") or request.GET.get("party")
+        parties = HeadParty.objects.order_by("partyname")
+
+        # if no party selected and action requires party -> show page with message
+        if not party_id:
+            # For actions that do not require a party, still return page (here all require a party)
+            ctx = {
+                "parties": parties,
+                "selected": None,
+                "entries": [],
+                "total_debit": Decimal("0"),
+                "total_credit": Decimal("0"),
+                "balance": Decimal("0"),
+            }
+            return self.render_to_response(ctx)
+
+        # load party and compute entries
         head = get_object_or_404(HeadParty, pk=party_id)
+        entries, total_debit, total_credit, balance = self._build_entries(head)
 
-        # Opening
-        if head.openingdebit and head.openingdebit != Decimal('0'):
-            entries.append({
-                'entry_no': 'OPEN',
-                'date': None,
-                'debit': head.openingdebit,
-                'credit': Decimal('0'),
-                'remark': 'Opening (Dr)'
-            })
-        elif head.openingcredit and head.openingcredit != Decimal('0'):
-            entries.append({
-                'entry_no': 'OPEN',
-                'date': None,
-                'debit': Decimal('0'),
-                'credit': head.openingcredit,
-                'remark': 'Opening (Cr)'
-            })
+        ctx = {
+            "parties": parties,
+            "selected": head,
+            "entries": entries,
+            "total_debit": total_debit,
+            "total_credit": total_credit,
+            "balance": balance,
+            "today": date.today(),
+        }
 
-        # Sales -> Debit
-        for s in SaleMaster.objects.filter(party=head).order_by('invdate'):
-            entries.append({
-                'entry_no': s.invno,
-                'date': s.invdate,
-                'debit': s.netamt,
-                'credit': Decimal('0'),
-                'remark': s.remark or f"Sale Inv#{s.invno}"
-            })
+        # ---------- show statement ----------
+        if action in (None, "statement"):
+            return self.render_to_response(ctx)
 
-        # Purchases -> Credit
-        for p in PurchaseMaster.objects.filter(party=head).order_by('invdate'):
-            entries.append({
-                'entry_no': p.invno,
-                'date': p.invdate,
-                'debit': Decimal('0'),
-                'credit': p.netamt,
-                'remark': p.remark or f"Purchase Inv#{p.invno}"
-            })
+        # ---------- printable ----------
+        if action == "print":
+            return render(request, self.printable_template, ctx)
 
-        # Naame entries -> Debit
+        # ---------- excel ----------
+        if action == "export_excel":
+            if Workbook is None:
+                return HttpResponse(
+                    "Required package 'openpyxl' not installed. Install with: pip install openpyxl",
+                    content_type="text/plain",
+                    status=500
+                )
+            try:
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Party Statement"
+                headers = ["Entry No", "Date", "Debit", "Credit", "Remark", "Balance"]
+                ws.append(headers)
+                for e in entries:
+                    ws.append([
+                        e.get("entry_no"),
+                        e["date"].strftime("%Y-%m-%d") if e["date"] else "",
+                        float(e.get("debit") or 0),
+                        float(e.get("credit") or 0),
+                        e.get("remark") or "",
+                        float(e.get("balance") or 0),
+                    ])
+                ws.append([])
+                ws.append(["", "Total", float(total_debit), float(total_credit), "", float(balance)])
+
+                if get_column_letter:
+                    for i, col in enumerate(ws.columns, start=1):
+                        max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
+                        ws.column_dimensions[get_column_letter(i)].width = max_len + 2
+
+                out = io.BytesIO()
+                wb.save(out)
+                out.seek(0)
+                resp = HttpResponse(
+                    out.read(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                safe_name = "".join(ch if ord(ch) < 128 else "?" for ch in head.partyname)[:40]
+                resp["Content-Disposition"] = f'attachment; filename="party_statement_{safe_name}.xlsx"'
+                return resp
+            except Exception as exc:
+                return HttpResponse(f"Excel export failed: {exc}", content_type="text/plain", status=500)
+
+        # ---------- pdf ----------
+        if action == "pdf":
+            if FPDF is None:
+                return HttpResponse(
+                    "Required package 'fpdf' not installed. Install with: pip install fpdf",
+                    content_type="text/plain",
+                    status=500
+                )
+
+            # helper to avoid FPDF unicode errors (keeps ascii only)
+            def safe_text(val, maxlen=None):
+                s = "" if val is None else str(val)
+                s = s.replace("—", "-").replace("–", "-")
+                s = "".join(ch if ord(ch) < 128 else "?" for ch in s)
+                return s[:maxlen] if maxlen else s
+
+            try:
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_auto_page_break(auto=True, margin=10)
+
+                # Header
+                pdf.set_font("Helvetica", "B", 14)
+                pdf.cell(0, 10, safe_text(f"Party Statement - {head.partyname}", 140), ln=True, align="C")
+                pdf.set_font("Helvetica", "", 10)
+                pdf.cell(0, 6, safe_text(f"Generated on: {date.today().strftime('%d-%m-%Y')}", 80), ln=True, align="C")
+                pdf.ln(4)
+
+                headers = ["Entry No", "Date", "Debit", "Credit", "Remark", "Balance"]
+                widths = [22, 22, 28, 28, 60, 30]
+                pdf.set_font("Helvetica", "B", 9)
+                for i, h in enumerate(headers):
+                    pdf.cell(widths[i], 8, safe_text(h, 40), border=1, align="C")
+                pdf.ln(8)
+
+                pdf.set_font("Helvetica", "", 9)
+                for e in entries:
+                    vals = [
+                        safe_text(e.get("entry_no", ""), 20),
+                        safe_text(e["date"].strftime("%Y-%m-%d") if e["date"] else "", 20),
+                        safe_text(f"{(e.get('debit') or Decimal('0')):.2f}", 20),
+                        safe_text(f"{(e.get('credit') or Decimal('0')):.2f}", 20),
+                        safe_text(e.get("remark", ""), 120),
+                        safe_text(f"{(e.get('balance') or Decimal('0')):.2f}", 20),
+                    ]
+                    for i, v in enumerate(vals):
+                        pdf.cell(widths[i], 7, v, border=1, align="L" if i in (0, 1, 4) else "R")
+                    pdf.ln(7)
+
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.cell(widths[0] + widths[1], 8, safe_text("TOTAL", 40), border=1, align="L")
+                pdf.cell(widths[2], 8, safe_text(f"{total_debit:.2f}", 20), border=1, align="R")
+                pdf.cell(widths[3], 8, safe_text(f"{total_credit:.2f}", 20), border=1, align="R")
+                pdf.cell(widths[4], 8, "", border=1, align="R")
+                pdf.cell(widths[5], 8, safe_text(f"{balance:.2f}", 20), border=1, align="R")
+
+                buf = io.BytesIO()
+                pdf.output(buf)
+                buf.seek(0)
+                resp = HttpResponse(buf.read(), content_type="application/pdf")
+                safe_name = "".join(ch if ord(ch) < 128 else "?" for ch in head.partyname)[:40]
+                resp["Content-Disposition"] = f'attachment; filename="party_statement_{safe_name}.pdf"'
+                return resp
+            except Exception as exc:
+                return HttpResponse(f"PDF generation failed: {exc}", content_type="text/plain", status=500)
+
+        # fallback: ensure a response always returned
+        return self.render_to_response(ctx)
+
+    # ---------- helper ----------
+    def _build_entries(self, head):
+        entries = []
+        if getattr(head, "openingdebit", None) and head.openingdebit != Decimal("0"):
+            entries.append({"entry_no": "OPEN", "date": None,
+                            "debit": head.openingdebit, "credit": Decimal("0"),
+                            "remark": "Opening (Dr)"})
+        elif getattr(head, "openingcredit", None) and head.openingcredit != Decimal("0"):
+            entries.append({"entry_no": "OPEN", "date": None,
+                            "debit": Decimal("0"), "credit": head.openingcredit,
+                            "remark": "Opening (Cr)"})
+
+        for s in SaleMaster.objects.filter(party=head).order_by("invdate"):
+            entries.append({"entry_no": s.invno, "date": s.invdate,
+                            "debit": s.netamt, "credit": Decimal("0"),
+                            "remark": s.remark or f"Sale Inv#{s.invno}"})
+        for p in PurchaseMaster.objects.filter(party=head).order_by("invdate"):
+            entries.append({"entry_no": p.invno, "date": p.invdate,
+                            "debit": Decimal("0"), "credit": p.netamt,
+                            "remark": p.remark or f"Purchase Inv#{p.invno}"})
         for n in NaameEntry.objects.filter(party=head).order_by('daily_page__date'):
-            entries.append({
-                'entry_no': n.entry_no,
-                'date': n.daily_page.date,
-                'debit': n.amount,
-                'credit': Decimal('0'),
-                'remark': n.remark or 'Naame'
-            })
-
-        # Jama entries -> Credit
+            entries.append({"entry_no": n.entry_no, "date": n.daily_page.date,
+                            "debit": n.amount, "credit": Decimal("0"),
+                            "remark": n.remark or "Naame"})
         for j in JamaEntry.objects.filter(party=head).order_by('daily_page__date'):
-            entries.append({
-                'entry_no': j.entry_no,
-                'date': j.daily_page.date,
-                'debit': Decimal('0'),
-                'credit': j.amount,
-                'remark': j.remark or 'Jama'
-            })
+            entries.append({"entry_no": j.entry_no, "date": j.daily_page.date,
+                            "debit": Decimal("0"), "credit": j.amount,
+                            "remark": j.remark or "Jama"})
 
-        # Sort entries by date (opening has date None)
-        entries = sorted(entries, key=lambda x: (x['date'] is None, x['date'] or ''))
-
-        # totals + running balance
-        total_debit = sum(e['debit'] for e in entries)
-        total_credit = sum(e['credit'] for e in entries)
-        bal = Decimal('0')
+        entries = sorted(entries, key=lambda x: (x["date"] is None, x["date"] or ""))
+        total_debit = sum(e["debit"] for e in entries)
+        total_credit = sum(e["credit"] for e in entries)
+        bal = Decimal("0")
         for e in entries:
-            bal += (e['debit'] or Decimal('0')) - (e['credit'] or Decimal('0'))
-            e['balance'] = bal
-
+            bal += (e["debit"] or Decimal("0")) - (e["credit"] or Decimal("0"))
+            e["balance"] = bal
         balance = total_debit - total_credit
-
-    else:
-        head = None
-        total_debit = total_credit = balance = Decimal('0')
-
-    return render(request, 'brokerapp/account/party_statement.html', {
-        'parties': parties,
-        'selected': head,
-        'entries': entries,
-        'total_debit': total_debit,
-        'total_credit': total_credit,
-        'balance': balance,
-    })
+        return entries, total_debit, total_credit, balance
     
-def broker_statement(request):
+class BrokerStatementView(TemplateView):
     """
-    Broker statement built from multiple models that reference Broker:
-      - JamaEntry  => treated as CREDIT (money received)
-      - NaameEntry => treated as DEBIT  (money paid)
-      - SaleMaster => uses 'dramt' as DEBIT by default (adjust if needed)
-      - PurchaseMaster => uses 'dramt' as CREDIT by default (adjust if needed)
-
-    If any mapping is different for your business logic, update the mapping lines below.
+    Single-URL Broker Statement view. POST name="action":
+      - statement
+      - print
+      - export_excel
+      - pdf
     """
-    brokers = Broker.objects.all().order_by('brokername')
-    selected = None
-    entries = []
-    total_debit = total_credit = 0.0
-    balance = 0.0
+    template_name = "brokerapp/account/broker_statement.html"
+    printable_template = "brokerapp/account/broker_statement_printable.html"
 
-    broker_key = request.GET.get('broker')  # brokername is primary_key on Broker
-    if broker_key:
-        selected = get_object_or_404(Broker, brokername=broker_key)
+    def get(self, request, *args, **kwargs):
+        brokers = Broker.objects.order_by("brokername")
+        ctx = {
+            "brokers": brokers,
+            "selected": None,
+            "entries": [],
+            "total_debit": Decimal("0"),
+            "total_credit": Decimal("0"),
+            "balance": Decimal("0"),
+        }
+        return self.render_to_response(ctx)
 
-        # 1) JamaEntry -> treat as CREDIT (amount credited to account)
-        jama_qs = JamaEntry.objects.filter(broker=selected).order_by('created_at')
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        broker_id = request.POST.get("broker") or request.GET.get("broker")
+        brokers = Broker.objects.order_by("brokername")
+
+        if not broker_id:
+            ctx = {
+                "brokers": brokers,
+                "selected": None,
+                "entries": [],
+                "total_debit": Decimal("0"),
+                "total_credit": Decimal("0"),
+                "balance": Decimal("0"),
+            }
+            return self.render_to_response(ctx)
+
+        selected = get_object_or_404(Broker, pk=broker_id)
+        entries, total_debit, total_credit, balance = self._build_entries(selected)
+
+        ctx = {
+            "brokers": brokers,
+            "selected": selected,
+            "entries": entries,
+            "total_debit": total_debit,
+            "total_credit": total_credit,
+            "balance": balance,
+            "today": date.today(),
+        }
+
+        # show statement in page
+        if action in (None, "statement"):
+            return self.render_to_response(ctx)
+
+        # printable HTML
+        if action == "print":
+            return render(request, self.printable_template, ctx)
+
+        # excel export
+        if action == "export_excel":
+            if Workbook is None:
+                return HttpResponse(
+                    "Required package 'openpyxl' not installed. Install with: pip install openpyxl",
+                    content_type="text/plain",
+                    status=500
+                )
+            try:
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Broker Statement"
+                headers = ["Entry No", "Date", "Debit", "Credit", "Remark", "Balance"]
+                ws.append(headers)
+                for e in entries:
+                    ws.append([
+                        e.get("entry_no"),
+                        e["date"].strftime("%Y-%m-%d") if e["date"] else "",
+                        float(e.get("debit") or 0),
+                        float(e.get("credit") or 0),
+                        e.get("remark") or "",
+                        float(e.get("balance") or 0),
+                    ])
+                ws.append([])
+                ws.append(["", "Total", float(total_debit), float(total_credit), "", float(balance)])
+
+                if get_column_letter:
+                    for i, col in enumerate(ws.columns, start=1):
+                        max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
+                        ws.column_dimensions[get_column_letter(i)].width = max_len + 2
+
+                out = io.BytesIO()
+                wb.save(out)
+                out.seek(0)
+                resp = HttpResponse(
+                    out.read(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                safe_name = "".join(ch if ord(ch) < 128 else "?" for ch in selected.brokername)[:40]
+                resp["Content-Disposition"] = f'attachment; filename="broker_statement_{safe_name}.xlsx"'
+                return resp
+            except Exception as exc:
+                return HttpResponse(f"Excel export failed: {exc}", content_type="text/plain", status=500)
+
+        # pdf export
+        if action == "pdf":
+            if FPDF is None:
+                return HttpResponse(
+                    "Required package 'fpdf' not installed. Install with: pip install fpdf",
+                    content_type="text/plain",
+                    status=500
+                )
+
+            def safe_text(val, maxlen=None):
+                s = "" if val is None else str(val)
+                s = s.replace("—", "-").replace("–", "-")
+                s = "".join(ch if ord(ch) < 128 else "?" for ch in s)
+                return s[:maxlen] if maxlen else s
+
+            try:
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_auto_page_break(auto=True, margin=10)
+
+                pdf.set_font("Helvetica", "B", 14)
+                pdf.cell(0, 10, safe_text(f"Broker Statement - {selected.brokername}", 140), ln=True, align="C")
+                pdf.set_font("Helvetica", "", 10)
+                pdf.cell(0, 6, safe_text(f"Generated on: {date.today().strftime('%d-%m-%Y')}", 80), ln=True, align="C")
+                pdf.ln(4)
+
+                headers = ["Entry No", "Date", "Debit", "Credit", "Remark", "Balance"]
+                widths = [22, 22, 28, 28, 60, 30]
+                pdf.set_font("Helvetica", "B", 9)
+                for i, h in enumerate(headers):
+                    pdf.cell(widths[i], 8, safe_text(h, 40), border=1, align="C")
+                pdf.ln(8)
+
+                pdf.set_font("Helvetica", "", 9)
+                for e in entries:
+                    vals = [
+                        safe_text(e.get("entry_no", ""), 20),
+                        safe_text(e["date"].strftime("%Y-%m-%d") if e["date"] else "", 20),
+                        safe_text(f"{(e.get('debit') or Decimal('0')):.2f}", 20),
+                        safe_text(f"{(e.get('credit') or Decimal('0')):.2f}", 20),
+                        safe_text(e.get("remark", ""), 120),
+                        safe_text(f"{(e.get('balance') or Decimal('0')):.2f}", 20),
+                    ]
+                    for i, v in enumerate(vals):
+                        pdf.cell(widths[i], 7, v, border=1, align="L" if i in (0, 1, 4) else "R")
+                    pdf.ln(7)
+
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.cell(widths[0] + widths[1], 8, safe_text("TOTAL", 40), border=1, align="L")
+                pdf.cell(widths[2], 8, safe_text(f"{total_debit:.2f}", 20), border=1, align="R")
+                pdf.cell(widths[3], 8, safe_text(f"{total_credit:.2f}", 20), border=1, align="R")
+                pdf.cell(widths[4], 8, "", border=1, align="R")
+                pdf.cell(widths[5], 8, safe_text(f"{balance:.2f}", 20), border=1, align="R")
+
+                buf = io.BytesIO()
+                pdf.output(buf)
+                buf.seek(0)
+                resp = HttpResponse(buf.read(), content_type="application/pdf")
+                safe_name = "".join(ch if ord(ch) < 128 else "?" for ch in selected.brokername)[:40]
+                resp["Content-Disposition"] = f'attachment; filename="broker_statement_{safe_name}.pdf"'
+                return resp
+            except Exception as exc:
+                return HttpResponse(f"PDF generation failed: {exc}", content_type="text/plain", status=500)
+
+        # fallback
+        return self.render_to_response(ctx)
+
+    def _build_entries(self, selected):
+   
+        entries = []
+
+        # helper to decide order_by field name for a model
+        def _order_field(model_cls, preferred):
+            # return preferred if model has it, otherwise fallback to 'id'
+            return preferred if hasattr(model_cls, preferred) else 'id'
+
+        # 1) JamaEntry -> credit
+        jama_order = _order_field(JamaEntry, 'created_at')
+        jama_qs = JamaEntry.objects.filter(broker=selected).order_by(jama_order)
         for j in jama_qs:
             date_val = j.created_at.date() if getattr(j, 'created_at', None) else None
-            amount = float(j.amount or 0)
+            amt = Decimal(str(j.amount or 0))
             entries.append({
-                'entry_no': f"J-{j.entry_no}",
-                'date': date_val,
-                'debit': 0.0,
-                'credit': amount,
-                'remark': (j.remark or '') + f" (Jama)",
+                "entry_no": f"J-{j.entry_no}",
+                "date": date_val,
+                "debit": Decimal("0"),
+                "credit": amt,
+                "remark": (j.remark or "") + " (Jama)",
             })
 
-        # 2) NaameEntry -> treat as DEBIT (amount paid)
-        naame_qs = NaameEntry.objects.filter(broker=selected).order_by('created_at')
+        # 2) NaameEntry -> debit
+        naame_order = _order_field(NaameEntry, 'created_at')
+        naame_qs = NaameEntry.objects.filter(broker=selected).order_by(naame_order)
         for n in naame_qs:
             date_val = n.created_at.date() if getattr(n, 'created_at', None) else None
-            amount = float(n.amount or 0)
+            amt = Decimal(str(n.amount or 0))
             entries.append({
-                'entry_no': f"N-{n.entry_no}",
-                'date': date_val,
-                'debit': amount,
-                'credit': 0.0,
-                'remark': (n.remark or '') + f" (Naame)",
+                "entry_no": f"N-{n.entry_no}",
+                "date": date_val,
+                "debit": amt,
+                "credit": Decimal("0"),
+                "remark": (n.remark or "") + " (Naame)",
             })
 
-        # 3) SaleMaster -> default: use dramt as DEBIT (broker charge). Change if business logic differs.
-        sale_qs = SaleMaster.objects.filter(broker=selected).order_by('invdate')
+        # 3) SaleMaster -> debit (using dramt)
+        sale_order = _order_field(SaleMaster, 'invdate')
+        sale_qs = SaleMaster.objects.filter(broker=selected).order_by(sale_order)
         for s in sale_qs:
-            date_val = getattr(s, 'invdate', None)
-            # prefer dramt (dalali amount). If you want different field, change below.
-            amt = float(getattr(s, 'dramt', 0) or 0)
-            # If your SaleMaster stores dalali differently (e.g. 'dr' or 'dramt'), adjust here.
+            date_val = getattr(s, "invdate", None)
+            amt = Decimal(str(getattr(s, "dramt", 0) or 0))
             entries.append({
-                'entry_no': f"S-{getattr(s, 'invno', '')}",
-                'date': date_val,
-                'debit': amt,
-                'credit': 0.0,
-                'remark': (getattr(s, 'remark', '') or '') + f" (Sale)",
+                "entry_no": f"S-{getattr(s, 'invno', '')}",
+                "date": date_val,
+                "debit": amt,
+                "credit": Decimal("0"),
+                "remark": (getattr(s, "remark", "") or "") + " (Sale)",
             })
 
-        # 4) PurchaseMaster -> default: use dramt as CREDIT (adjust if needed)
-        purchase_qs = PurchaseMaster.objects.filter(broker=selected).order_by('invdate')
+        # 4) PurchaseMaster -> credit (using dramt)
+        purchase_order = _order_field(PurchaseMaster, 'invdate')
+        purchase_qs = PurchaseMaster.objects.filter(broker=selected).order_by(purchase_order)
         for p in purchase_qs:
-            date_val = getattr(p, 'invdate', None)
-            amt = float(getattr(p, 'dramt', 0) or 0)
+            date_val = getattr(p, "invdate", None)
+            amt = Decimal(str(getattr(p, "dramt", 0) or 0))
             entries.append({
-                'entry_no': f"P-{getattr(p, 'invno', '')}",
-                'date': date_val,
-                'debit': 0.0,
-                'credit': amt,
-                'remark': (getattr(p, 'remark', '') or '') + f" (Purchase)",
+                "entry_no": f"P-{getattr(p, 'invno', '')}",
+                "date": date_val,
+                "debit": Decimal("0"),
+                "credit": amt,
+                "remark": (getattr(p, "remark", "") or "") + " (Purchase)",
             })
 
-        # Sort combined entries by date (None last) then by entry_no
-        # Convert None dates to far future for stable sort
-        def _date_key(item):
-            d = item.get('date')
-            return (d or datetime.max.date(), item.get('entry_no'))
+        # sort entries by date (None considered after real dates), then entry_no
+        # Use a stable key: (is_date_none, date_or_max, entry_no)
+        from datetime import datetime
+        entries.sort(key=lambda x: (x["date"] is None, x["date"] or datetime.max.date(), x.get("entry_no", "")))
 
-        entries.sort(key=_date_key)
+        # totals + running balance (Decimal)
+        total_debit = sum(e["debit"] for e in entries) if entries else Decimal("0")
+        total_credit = sum(e["credit"] for e in entries) if entries else Decimal("0")
+        bal = Decimal("0")
+        for e in entries:
+            bal += (e["debit"] - e["credit"])
+            e["balance"] = bal
 
-        # Compute totals and running balance (balance = previous + debit - credit)
-        total_debit = sum(item['debit'] for item in entries)
-        total_credit = sum(item['credit'] for item in entries)
-        running = 0.0
-        for item in entries:
-            running += (item['debit'] - item['credit'])
-            # attach running balance to item for template
-            item['balance'] = running
-
-        balance = running
-
-    context = {
-        'brokers': brokers,
-        'selected': selected,
-        'entries': entries,
-        'total_debit': total_debit,
-        'total_credit': total_credit,
-        'balance': balance,
-    }
-    return render(request, 'brokerapp/account/broker_statement.html', context)
-    
+        balance = bal
+        return entries, total_debit, total_credit, balance
