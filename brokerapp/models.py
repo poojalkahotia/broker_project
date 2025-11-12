@@ -101,6 +101,9 @@ class SaleDetails(models.Model):
     millwt = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     diffwt = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
+    # NEW: FRK weight (shown in UI as FrkWt) — store it explicitly
+    frkwt = models.DecimalField("FrkWt", max_digits=12, decimal_places=2, default=0)
+    
     # NEW Lot number after diffwt
     lotno = models.CharField(max_length=50, blank=True, null=True)
 

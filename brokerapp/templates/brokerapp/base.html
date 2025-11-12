@@ -41,6 +41,9 @@
                         <li><a class="dropdown-item" href="{% url 'purchase_form_new' %}">Purchase</a></li>
                         <li><a class="dropdown-item" href="{% url 'saledata' %}">Sale Data</a></li>
                         <li><a class="dropdown-item" href="{% url 'purchasedata' %}">Purchase Data</a></li>
+                        <!-- ADDED: Sale Search for LotNo/FrkWt workflow -->
+                         <li><hr class="dropdown-divider"></li>
+                         <li><a class="dropdown-item" href="{% url 'sale_search' %}">Sale — LotNo / FrkWt Search</a></li>
                     </ul>
                 </li>
 
@@ -61,6 +64,11 @@
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" href="{% url 'all_party_balance' %}">All Party Balance</a></li>
                         <li><a class="dropdown-item" href="{% url 'party_statement' %}">Party Statement</a></li>
+                        <!-- Separator -->
+                        
+                        <li><hr class="dropdown-divider"></li>
+
+                        <li><a class="dropdown-item" href="{% url 'all_broker_balance' %}">All Broker Balance</a></li>
                         <li><a class="dropdown-item" href="{% url 'broker_statement' %}">Broker Statement</a></li>
                     </ul>
                 </li>

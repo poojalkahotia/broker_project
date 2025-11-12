@@ -3,7 +3,8 @@
 
 {% block content %}
 <div class="card shadow-sm border-0 mt-3">
-  <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+  <div class="card-header card-header-navy d-flex justify-content-between align-items-center">
+
     <h5 class="mb-0"><i class="fas fa-chart-line"></i> Sale Report</h5>
     <small class="text-light">Filter & View Sale Summary</small>
   </div>
@@ -94,16 +95,17 @@
                   <table class="table table-bordered table-sm mb-0">
                     <thead class="table-light">
                       <tr class="text-center">
-                        <th style="width:18%">Item</th>
-                        <th style="width:10%">Bora</th>
-                        <th style="width:10%">TBWt</th>
-                        <th style="width:10%">Qty</th>
-                        <th style="width:10%">Rate</th>
-                        <th style="width:12%">Amount</th>
-                        <th style="width:10%">PartyWt</th>
-                        <th style="width:10%">MillWt</th>
-                        <th style="width:10%">DiffWt</th>
-                        <th style="width:10%">Lot No</th>
+                        <th style="width:16%">Item</th>
+                        <th style="width:8%">Bora</th>
+                        <th style="width:8%">TBWt</th>
+                        <th style="width:8%">Qty</th>
+                        <th style="width:8%">Rate</th>
+                        <th style="width:10%">Amount</th>
+                        <th style="width:8%">PartyWt</th>
+                        <th style="width:8%">MillWt</th>
+                        <th style="width:8%">FrkWt</th>
+                        <th style="width:8%">DiffWt</th>
+                        <th style="width:8%">Lot No</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -117,6 +119,7 @@
                         <td>{{ d.amount|floatformat:2 }}</td>
                         <td>{{ d.partywt|floatformat:2 }}</td>
                         <td>{{ d.millwt|floatformat:2 }}</td>
+                        <td>{{ d.frkwt|floatformat:2 }}</td>
                         <td>{{ d.diffwt|floatformat:2 }}</td>
                         <td>{{ d.lotno }}</td>
                       </tr>
@@ -148,6 +151,12 @@
                 <td colspan="7" class="text-start">{{ group.totals.total_tbwt|floatformat:2 }}</td>
               </tr>
               {% endif %}
++              {% if group.totals.total_frkwt %}
++              <tr>
++                <td colspan="3" class="text-end">Group FrkWt:</td>
++                <td colspan="7" class="text-start">{{ group.totals.total_frkwt|floatformat:2 }}</td>
++              </tr>
+              {% endif %}
             </tfoot>
           </table>
         </div>
@@ -170,6 +179,9 @@
           <div class="total-line"><span>Advance:</span> <strong>{{ overall_totals.total_advance|floatformat:2 }}</strong></div>
           {% if overall_totals.total_tbwt %}
           <div class="total-line"><span>Total TBWt:</span> <strong>{{ overall_totals.total_tbwt|floatformat:2 }}</strong></div>
+          {% endif %}
+          {% if overall_totals.total_frkwt %}
+          <div class="total-line"><span>Total FrkWt:</span> <strong>{{ overall_totals.total_frkwt|floatformat:2 }}</strong></div>
           {% endif %}
           <div class="total-line border-top pt-2 mt-2"><span>Net Amt:</span> <strong>{{ overall_totals.total_netamt|floatformat:2 }}</strong></div>
         </div>

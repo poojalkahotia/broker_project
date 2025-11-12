@@ -187,7 +187,7 @@ class SaleDetailsForm(BlankZeroModelForm):
         model = SaleDetails
         fields = [
             'item', 'bora', 'bn', 'bnwt', 'bo', 'bowt','tbwt',
-            'qty', 'rate', 'amount', 'partywt', 'millwt', 'diffwt', 'lotno'
+            'qty', 'rate', 'amount', 'partywt', 'millwt', 'diffwt', 'frkwt','lotno'
         ]
         widgets = {
             'bora': forms.NumberInput(attrs={'class': 'form-control'}),
@@ -202,6 +202,7 @@ class SaleDetailsForm(BlankZeroModelForm):
             'partywt': forms.NumberInput(attrs={'class': 'form-control', 'oninput': 'calculateDiffWt()'}),
             'millwt': forms.NumberInput(attrs={'class': 'form-control', 'oninput': 'calculateDiffWt()'}),
             'diffwt': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'frkwt': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'oninput': 'calculateDiffWt()'}),
             'lotno': forms.TextInput(attrs={'class': 'form-control'}),
         }
 

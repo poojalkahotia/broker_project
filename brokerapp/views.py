@@ -125,6 +125,7 @@ def sale_form(request, invno=None):
                 "partywt": float(d.partywt),
                 "millwt": float(d.millwt),
                 "diffwt": float(d.diffwt),
+                "frkwt": float(getattr(d, "frkwt", 0)),
                 "lotno": d.lotno or "",
             })
         sale_items_json = json.dumps(items_data)
@@ -231,6 +232,7 @@ def save_sale(request):
                 amount=to_decimal(it.get("amt", 0)),
                 partywt=to_decimal(it.get("partywt", 0)),
                 millwt=to_decimal(it.get("millwt", 0)),
+                frkwt=to_decimal(it.get("frkwt", 0)),
                 diffwt=to_decimal(it.get("diffwt", 0)),
                 lotno=it.get("lotno", "").strip(),
             )
@@ -327,6 +329,7 @@ def update_sale(request, invno):
                 amount=to_decimal(it.get("amt", 0)),
                 partywt=to_decimal(it.get("partywt", 0)),
                 millwt=to_decimal(it.get("millwt", 0)),
+                frkwt=to_decimal(it.get("frkwt", 0)),
                 diffwt=to_decimal(it.get("diffwt", 0)),
                 lotno=it.get("lotno", "").strip(),
             )
@@ -412,7 +415,12 @@ def sale_report(request):
             group_sales = sales.filter(invdate=g["invdate"])
             # TBWt sum for this group (sum over details)
             tbwt_sum = SaleDetails.objects.filter(salemaster__in=group_sales).aggregate(total_tbwt=Sum("tbwt"))["total_tbwt"] or 0
+            # FrkWt sum for this group (sum over details)
+            frkwt_sum = SaleDetails.objects.filter(salemaster__in=group_sales).aggregate(total_frkwt=Sum("frkwt"))["total_frkwt"] or 0
+
             g["total_tbwt"] = tbwt_sum
+            g["total_frkwt"] = frkwt_sum
+
             report_data.append({
                 "group": g["invdate"],
                 "items": group_sales,
@@ -436,14 +444,18 @@ def sale_report(request):
                 broker__brokername=g["broker__brokername"]
             )
             tbwt_sum = SaleDetails.objects.filter(salemaster__in=group_sales).aggregate(total_tbwt=Sum("tbwt"))["total_tbwt"] or 0
+            frkwt_sum = SaleDetails.objects.filter(salemaster__in=group_sales).aggregate(total_frkwt=Sum("frkwt"))["total_frkwt"] or 0
+
             g["total_tbwt"] = tbwt_sum
+            g["total_frkwt"] = frkwt_sum
+
             report_data.append({
                 "group": f"{g['invdate']} - {g['broker__brokername'] or 'No Broker'}",
                 "items": group_sales,
                 "totals": g
             })
 
-    # Overall Totals (header-level) + TBWt across all details in the filtered set
+    # Overall Totals (header-level) + TBWt + FrkWt across all details in the filtered set
     overall_totals = sales.aggregate(
         total_totalamt=Sum("totalamt"),
         total_batavamt=Sum("batavamt"),
@@ -454,7 +466,10 @@ def sale_report(request):
         total_netamt=Sum("netamt"),
     )
     overall_tbwt = SaleDetails.objects.filter(salemaster__in=sales).aggregate(total_tbwt=Sum("tbwt"))["total_tbwt"] or 0
+    overall_frkwt = SaleDetails.objects.filter(salemaster__in=sales).aggregate(total_frkwt=Sum("frkwt"))["total_frkwt"] or 0
+
     overall_totals["total_tbwt"] = overall_tbwt
+    overall_totals["total_frkwt"] = overall_frkwt
 
     # Dropdowns also ORG SCOPED
     brokers = Broker.objects.filter(org=request.current_org).order_by("brokername")
@@ -474,7 +489,7 @@ def sale_report(request):
 def sale_report_pdf(request):
     """
     Generate Sale Report PDF (FPDF) using current filters.
-    Includes per-invoice detail rows with TBWt.
+    Includes per-invoice detail rows with TBWt and FrkWt.
     Numbers are right-aligned with thousand separators.
     """
     # --- build same filtered queryset as HTML report ---
@@ -547,10 +562,11 @@ def sale_report_pdf(request):
     def draw_detail_header():
         pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Helvetica", "B", 8)
+        # Adjusted widths to include FrkWt column
         cols = [
-            ("Item", 44), ("Bora", 16), ("TBWt", 16),
-            ("Qty", 16), ("Rate", 16), ("Amount", 22),
-            ("PWt", 16), ("MWt", 16), ("DWt", 16), ("Lot", 16),
+            ("Item", 40), ("Bora", 14), ("TBWt", 14),
+            ("Qty", 12), ("Rate", 14), ("Amount", 20),
+            ("PWt", 14), ("MWt", 14), ("FrkWt", 12), ("DWt", 12), ("Lot", 12),
         ]
         for text, w in cols:
             pdf.cell(w, 6, text, border=1, align="C", fill=True)
@@ -590,16 +606,18 @@ def sale_report_pdf(request):
         # details
         draw_detail_header()
         for d in s.details.all():
-            pdf.cell(44, 6, (d.item.item_name or "")[:28], border=1, align="L")
-            cellR(16, 6, fmt2(d.bora), border=1)
-            cellR(16, 6, fmt2(d.tbwt), border=1)
-            cellR(16, 6, fmt2(d.qty), border=1)
-            cellR(16, 6, fmt2(d.rate), border=1)
-            cellR(22, 6, fmt2(d.amount), border=1)
-            cellR(16, 6, fmt2(d.partywt), border=1)
-            cellR(16, 6, fmt2(d.millwt), border=1)
-            cellR(16, 6, fmt2(d.diffwt), border=1)
-            pdf.cell(16, 6, (d.lotno or "")[:8], border=1, align="C")
+            pdf.cell(40, 6, (d.item.item_name or "")[:28], border=1, align="L")
+            cellR(14, 6, fmt2(d.bora), border=1)
+            cellR(14, 6, fmt2(d.tbwt), border=1)
+            cellR(12, 6, fmt2(d.qty), border=1)
+            cellR(14, 6, fmt2(d.rate), border=1)
+            cellR(20, 6, fmt2(d.amount), border=1)
+            cellR(14, 6, fmt2(d.partywt), border=1)
+            cellR(14, 6, fmt2(d.millwt), border=1)
+            # FrkWt column
+            cellR(12, 6, fmt2(getattr(d, "frkwt", 0)), border=1)
+            cellR(12, 6, fmt2(d.diffwt), border=1)
+            pdf.cell(12, 6, (d.lotno or "")[:8], border=1, align="C")
             pdf.ln(6)
 
     # overall totals
@@ -614,6 +632,9 @@ def sale_report_pdf(request):
     overall_tbwt = SaleDetails.objects.filter(salemaster__in=sales).aggregate(
         total_tbwt=Sum("tbwt")
     )["total_tbwt"] or 0
+    overall_frkwt = SaleDetails.objects.filter(salemaster__in=sales).aggregate(
+        total_frkwt=Sum("frkwt")
+    )["total_frkwt"] or 0
 
     pdf.ln(2)
     pdf.set_font("Helvetica", "B", 10)
@@ -626,6 +647,7 @@ def sale_report_pdf(request):
         f"Other: {fmt2(overall['total_other'] or 0)}",
         f"Advance: {fmt2(overall['total_advance'] or 0)}",
         f"Total TBWt: {fmt2(overall_tbwt)}",
+        f"Total FrkWt: {fmt2(overall_frkwt)}",
         f"Net Amt: {fmt2(overall['total_netamt'] or 0)}",
     ]
     for line in lines:
@@ -639,6 +661,60 @@ def sale_report_pdf(request):
     resp["Content-Disposition"] = f'inline; filename="{filename}"'
     return resp
 
+def sale_search_view(request):
+    """
+    SaleDetails search tailored to your models.
+    GET params supported:
+      - frkwt (exact)
+      - frkwt_min, frkwt_max (optional range)
+      - lotno
+      - partyname (matches SaleMaster.party.partyname)
+      - invno (matches SaleMaster.invno)
+    Orders by SaleMaster.invdate desc. Limits to 500 results.
+    """
+    qs = SaleDetails.objects.select_related('salemaster', 'salemaster__party').all()
+
+    # numeric filters for FrkWt
+    frkwt = request.GET.get('frkwt')
+    frkwt_min = request.GET.get('frkwt_min')
+    frkwt_max = request.GET.get('frkwt_max')
+
+    if frkwt:
+        try:
+            # cast to float/Decimal compare (Django will handle string numbers too)
+            qs = qs.filter(frkwt__exact=frkwt)
+        except (ValueError, TypeError):
+            pass
+    else:
+        if frkwt_min:
+            try:
+                qs = qs.filter(frkwt__gte=frkwt_min)
+            except (ValueError, TypeError):
+                pass
+        if frkwt_max:
+            try:
+                qs = qs.filter(frkwt__lte=frkwt_max)
+            except (ValueError, TypeError):
+                pass
+
+    # string-based filters
+    lotno = request.GET.get('lotno')
+    if lotno:
+        qs = qs.filter(lotno__icontains=lotno)
+
+    partyname = request.GET.get('partyname')
+    if partyname:
+        # your HeadParty field is "partyname"
+        qs = qs.filter(salemaster__party__partyname__icontains=partyname)
+
+    invno = request.GET.get('invno')
+    if invno:
+        qs = qs.filter(salemaster__invno__icontains=invno)
+
+    # final ordering and limit
+    sales = qs.order_by('-salemaster__invdate')[:500]
+
+    return render(request, 'brokerapp/sale_search.html', {'sales': sales})
 
 
 def bardana_report(request):
@@ -2340,3 +2416,230 @@ class BrokerStatementView(TemplateView):
 
         balance = bal
         return entries, total_debit, total_credit, balance
+
+
+# --- AllBrokerBalanceView ---
+class AllBrokerBalanceView(TemplateView):
+    """
+    Broker version of All Party Balance.
+    Supports POST actions via buttons with name="action":
+      - balance       : show table in page
+      - print         : render printable HTML (user can browser-print)
+      - export_excel  : return .xlsx (requires openpyxl)
+      - pdf           : return PDF generated with fpdf2 (if installed)
+    """
+    template_name = "brokerapp/account/all_broker_balance.html"
+    printable_template = "brokerapp/account/all_broker_balance_printable.html"
+
+    # ---------- helpers ----------
+    def _org_filter(self, qs):
+        org_id = self.request.session.get("org_id")
+        if not org_id:
+            return qs
+        field_names = [f.attname for f in qs.model._meta.fields]
+        if "org_id" in field_names:
+            return qs.filter(org_id=org_id)
+        return qs
+
+    def _sum(self, qs, field):
+        """Safe sum returning Decimal(0) when None."""
+        return qs.aggregate(t=Sum(field))["t"] or Decimal("0")
+
+    # ---------- GET ----------
+    def get(self, request, *args, **kwargs):
+        today = date.today()
+        ctx = self._build_context(start=today, end=today, broker=None)
+        ctx["show_table"] = False
+        return self.render_to_response(ctx)
+
+    # ---------- POST ----------
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        today = date.today()
+
+        # Build rows/totals (same data used by all actions)
+        ctx = self._build_context(start=today, end=today, broker=None)
+
+        # Balance -> show table in same template
+        if action == "balance" or not action:
+            ctx["show_table"] = True
+            return self.render_to_response(ctx)
+
+        # Print -> render printable HTML (no buttons)
+        if action == "print":
+            ctx["show_table"] = True
+            return render(request, self.printable_template, ctx)
+
+        # Export Excel -> create .xlsx (requires openpyxl)
+        if action == "export_excel":
+            try:
+                from openpyxl import Workbook
+                from openpyxl.utils import get_column_letter
+            except Exception:
+                return HttpResponse(
+                    "Required package 'openpyxl' not installed. Install with: pip install openpyxl",
+                    content_type="text/plain",
+                    status=500
+                )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "All Broker Balance"
+
+            headers = ["Broker", "Op Dr", "Op Cr", "Opening", "Sale", "Purchase", "Naame", "Jama", "Balance"]
+            ws.append(headers)
+
+            for r in ctx["rows"]:
+                bname = getattr(r["broker"], "brokername", str(r["broker"]))
+                ws.append([
+                    bname,
+                    float(r["op_dr"]), float(r["op_cr"]),
+                    float(r["opening"]), float(r["sale"]),
+                    float(r["purchase"]), float(r["naame"]),
+                    float(r["jama"]), float(r["balance"])
+                ])
+
+            # auto column width (simple)
+            for i, col in enumerate(ws.columns, start=1):
+                max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
+                ws.column_dimensions[get_column_letter(i)].width = max_len + 2
+
+            out = io.BytesIO()
+            wb.save(out)
+            out.seek(0)
+            resp = HttpResponse(
+                out.read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            resp["Content-Disposition"] = f'attachment; filename="all_broker_balance_{today}.xlsx"'
+            return resp
+
+        # PDF -> generate using fpdf2
+        if action == "pdf":
+            if FPDF is None:
+                return HttpResponse(
+                    "Required package 'fpdf2' not installed. Install with: pip install fpdf2",
+                    content_type="text/plain",
+                    status=500
+                )
+
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_auto_page_break(auto=True, margin=10)
+
+            # Header
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.cell(0, 10, "All Broker Balance", ln=True, align="C")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.cell(0, 6, f"Generated on: {today.strftime('%d-%m-%Y')}", ln=True, align="C")
+            pdf.ln(4)
+
+            # Table headers
+            headers = ["Broker", "Op Dr", "Op Cr", "Opening", "Sale", "Purchase", "Naame", "Jama", "Balance"]
+            col_widths = [50, 18, 18, 24, 18, 22, 18, 18, 22]
+
+            pdf.set_font("Helvetica", "B", 9)
+            for i, h in enumerate(headers):
+                pdf.cell(col_widths[i], 8, h, border=1, align="C")
+            pdf.ln(8)
+
+            # Rows
+            pdf.set_font("Helvetica", "", 9)
+            for r in ctx["rows"]:
+                vals = [
+                    getattr(r["broker"], "brokername", str(r["broker"])),
+                    f"{r['op_dr']:.2f}", f"{r['op_cr']:.2f}",
+                    f"{r['opening']:.2f}", f"{r['sale']:.2f}",
+                    f"{r['purchase']:.2f}", f"{r['naame']:.2f}",
+                    f"{r['jama']:.2f}", f"{r['balance']:.2f}"
+                ]
+                for i, v in enumerate(vals):
+                    align = "L" if i == 0 else "R"
+                    pdf.cell(col_widths[i], 7, v, border=1, align=align)
+                pdf.ln(7)
+
+            # Totals row
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(col_widths[0], 8, "TOTAL", border=1, align="L")
+            totals = ctx["totals"]
+            # print totals aligned with numeric columns (skip Opening total)
+            pdf.cell(col_widths[1], 8, f"{totals['opdr']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[2], 8, f"{totals['opcr']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[3], 8, "", border=1, align="R")
+            pdf.cell(col_widths[4], 8, f"{totals['sale']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[5], 8, f"{totals['purchase']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[6], 8, f"{totals['naame']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[7], 8, f"{totals['jama']:.2f}", border=1, align="R")
+            pdf.cell(col_widths[8], 8, f"{totals['balance']:.2f}", border=1, align="R")
+            pdf.ln(10)
+
+            buf = io.BytesIO()
+            pdf.output(buf)
+            buf.seek(0)
+            resp = HttpResponse(buf.read(), content_type="application/pdf")
+            resp["Content-Disposition"] = f'attachment; filename="all_broker_balance_{today}.pdf"'
+            return resp
+
+        # Unknown action -> render without table
+        ctx["show_table"] = False
+        return self.render_to_response(ctx)
+
+    # ---------- core calculation ----------
+    def _build_context(self, start, end, broker):
+        # brokers
+        from .models import Broker, HeadParty, SaleMaster, PurchaseMaster, NaameEntry, JamaEntry, DailyPage
+
+        brokers = Broker.objects.all().order_by("brokername")
+        if broker:
+            brokers = brokers.filter(brokername=broker.brokername)
+
+        rows = []
+        totals = {
+            "opdr": Decimal("0"), "opcr": Decimal("0"),
+            "sale": Decimal("0"), "purchase": Decimal("0"),
+            "naame": Decimal("0"), "jama": Decimal("0"),
+            "balance": Decimal("0")
+        }
+
+        dp_before = DailyPage.objects.filter(date__lt=start)
+        dp_range = DailyPage.objects.filter(date__range=(start, end))
+
+        org_id = self.request.session.get("org_id")
+        if org_id:
+            dp_before = dp_before.filter(org_id=org_id)
+            dp_range = dp_range.filter(org_id=org_id)
+            brokers = brokers.filter(org_id=org_id)
+
+        for b in brokers:
+            op_dr = Decimal(getattr(b, "openingdebit", 0) or 0)
+            op_cr = Decimal(getattr(b, "openingcredit", 0) or 0)
+
+            sale_before = self._sum(self._org_filter(SaleMaster.objects.filter(broker=b, invdate__lt=start)), "netamt")
+            purch_before = self._sum(self._org_filter(PurchaseMaster.objects.filter(broker=b, invdate__lt=start)), "netamt")
+            naame_before = self._sum(NaameEntry.objects.filter(daily_page__in=dp_before, broker=b), "amount")
+            jama_before = self._sum(JamaEntry.objects.filter(daily_page__in=dp_before, broker=b), "amount")
+
+            opening = (op_dr - op_cr) + (sale_before - purch_before + naame_before - jama_before)
+
+            sale = self._sum(self._org_filter(SaleMaster.objects.filter(broker=b, invdate__range=(start, end))), "netamt")
+            purchase = self._sum(self._org_filter(PurchaseMaster.objects.filter(broker=b, invdate__range=(start, end))), "netamt")
+            naame = self._sum(NaameEntry.objects.filter(daily_page__in=dp_range, broker=b), "amount")
+            jama = self._sum(JamaEntry.objects.filter(daily_page__in=dp_range, broker=b), "amount")
+
+            balance = opening + sale - purchase + naame - jama
+
+            rows.append({
+                "broker": b, "op_dr": op_dr, "op_cr": op_cr, "opening": opening,
+                "sale": sale, "purchase": purchase, "naame": naame,
+                "jama": jama, "balance": balance
+            })
+
+            totals["opdr"] += op_dr
+            totals["opcr"] += op_cr
+            totals["sale"] += sale
+            totals["purchase"] += purchase
+            totals["naame"] += naame
+            totals["jama"] += jama
+            totals["balance"] += balance
+
+        return {"rows": rows, "totals": totals, "start": start, "end": end}

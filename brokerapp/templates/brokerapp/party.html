@@ -91,51 +91,46 @@
         <div class="col-md-6">
             <h4 class="text-success mb-3">📋 Party List</h4>
 
-            <!-- responsive wrapper -->
             <div class="table-responsive">
-              <table class="table table-bordered table-striped mb-0">
-                  <thead class="table-dark">
-                      <tr>
-                          <th>Party Name</th>
-                          <th>City</th>
-                          <th>Mobile</th>
-                          <th style="width:1%;">Action</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      {% for party in parties %}
-                          <tr>
-                              <td class="text-start">{{ party.partyname }}</td>
-                              <td class="text-start">{{ party.city }}</td>
-                              <td class="text-start">{{ party.mobile }}</td>
-                              <td class="text-center align-middle">
-                                  <!--
-                                    d-inline-flex + flex-nowrap prevent the two buttons from stacking.
-                                    gap-2 gives a small space between them.
-                                  -->
-                                  <div class="d-inline-flex flex-row flex-nowrap align-items-center gap-2">
-                                      <a href="{% url 'party_edit' party.partyname %}"
-                                         class="btn btn-sm btn-warning action-btn-edit"
-                                         aria-label="Edit {{ party.partyname }}">Edit</a>
+            <table class="table table-bordered table-striped mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Party Name</th>
+                        <th>City</th>
+                        <th>Mobile</th>
+                        <th style="width:1%;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for party in parties %}
+                        <tr>
+                            <td class="text-start">{{ party.partyname }}</td>
+                            <td class="text-start">{{ party.city }}</td>
+                            <td class="text-start">{{ party.mobile }}</td>
+                            <td class="text-center align-middle">
+                                <div class="d-inline-flex flex-row flex-nowrap align-items-center gap-2">
+                                    <a href="{% url 'party_edit' party.partyname %}"
+                                        class="btn btn-sm btn-warning"
+                                        aria-label="Edit {{ party.partyname }}">
+                                        Edit
+                                    </a>
 
-                                      <a href="{% url 'party_delete' party.partyname %}"
-                                         class="btn btn-sm btn-danger action-btn-delete"
-                                         aria-label="Delete {{ party.partyname }}"
-                                         onclick="return confirm('Are you sure you want to delete {{ party.partyname }}?')">
-                                         Delete
-                                      </a>
-                                  </div>
-                              </td>
-                          </tr>
-                      {% empty %}
-                          <tr><td colspan="4" class="text-center">No parties found.</td></tr>
-                      {% endfor %}
-                  </tbody>
-              </table>
+                                    <a href="{% url 'party_delete' party.partyname %}"
+                                        class="btn btn-sm btn-danger"
+                                        aria-label="Delete {{ party.partyname }}"
+                                        onclick="return confirm('Are you sure you want to delete {{ party.partyname }}?')">
+                                        Delete
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="text-center">No parties found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             </div>
         </div>
-    </div>
-</div>
 
 
 <!-- Auto-hide message after 3 seconds -->
@@ -145,5 +140,4 @@
     if (box) box.style.display = 'none';
   }, 3000);
 </script>
-
 {% endblock %}

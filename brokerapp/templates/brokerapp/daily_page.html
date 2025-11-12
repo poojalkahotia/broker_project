@@ -6,7 +6,7 @@
     <h6 class="mb-0">Daily Page</h6>
     <div class="d-flex align-items-center">
       <label class="me-2 fw-semibold mb-0">Date:</label>
-      <input type="date" id="dp_date" class="form-control me-2" style="width:200px"
+      <input type="date" id="dp_date" name="date" class="form-control me-2" style="width:200px"
              value="{{ selected_date|date:'Y-m-d' }}">
       <button id="btn_show" class="btn btn-outline-primary me-2">Show</button>
       <button type="button" id="btn_pdf" class="btn btn-outline-danger">Download PDF</button>
@@ -33,7 +33,7 @@
             <!-- Amount (moved first to match table) -->
             <div class="col-md-2">
               <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="jama_amount" class="form-control text-end" step="0.01">
+              <input type="number" name="jama_amount" id="jama_amount" class="form-control text-end" step="0.01">
             </div>
 
             <!-- Party -->
@@ -46,7 +46,7 @@
                 </a>
               </label>
 
-              <select name="party" id="jama_party" class="form-control">
+              <select name="party" id="jama_party" name="jama_party" class="form-control">
                 <option value="">Select Party</option>
                 {% for p in parties %}<option value="{{ p.partyname }}">{{ p.partyname }}</option>{% endfor %}
               </select>
@@ -141,7 +141,7 @@
             <!-- Amount (moved first to match table) -->
             <div class="col-md-2">
               <label class="form-label">Amount</label>
-              <input type="number" name="amount" id="naame_amount" class="form-control text-end" step="0.01">
+              <input type="number" name="naame_amount" id="naame_amount" class="form-control text-end" step="0.01">
             </div>
 
             <!-- Party -->
@@ -153,7 +153,7 @@
                   Party <i class="bi bi-plus-circle"></i>
                 </a>
               </label>
-              <select name="party" id="naame_party" class="form-control">
+              <select name="naame_party" id="naame_party" class="form-control">
                 <option value="">Select Party</option>
                 {% for p in parties %}
                   <option value="{{ p.partyname }}">{{ p.partyname }}</option>

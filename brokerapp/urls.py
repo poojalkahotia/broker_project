@@ -39,7 +39,7 @@ urlpatterns = [
     path('sale/update/<int:invno>/', views.update_sale, name='update_sale'),
     path('sale/delete/<int:invno>/', views.delete_sale, name='delete_sale'),
     path('saledata/', views.sale_data_view, name='saledata'),
-    
+    path('sale-search/', views.sale_search_view, name='sale_search'),
     path("sale-report/", views.sale_report, name="sale_report"),
     path('reports/sales/pdf/', views.sale_report_pdf, name='sale_report_pdf'),
 
@@ -67,7 +67,7 @@ urlpatterns = [
     path("account/party-statement/", views.PartyStatementView.as_view(), name="party_statement"),
 
     path('account/broker-statement/', views.BrokerStatementView.as_view(), name='broker_statement'),
-    
+    path('account/all-broker-balance/', views.AllBrokerBalanceView.as_view(), name='all_broker_balance'),
 ]
 
 
