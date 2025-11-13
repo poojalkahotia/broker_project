@@ -2,20 +2,35 @@ import os
 from pathlib import Path
 import dj_database_url
 
+# -------------------------
+# Base
+# -------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Secret key from environment (Render) or fallback for local
-SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key-for-local-dev')
+# -------------------------
+# Secrets & debug
+# -------------------------
+# Use environment SECRET_KEY in Render / production
+SECRET_KEY = os.environ.get("SECRET_KEY", "fallback-secret-key-for-local-dev")
 
-DEBUG = True  # change to False after deployment
+# Control debug from environment. Default True (local). In Render set DEBUG=False.
+DEBUG = os.environ.get("DEBUG", "True").lower() in ("1", "true", "yes")
 
-# ✅ Allow all during dev; restrict later to your Render domain
-ALLOWED_HOSTS = ['*']
+# -------------------------
+# Hosts / CSRF
+# -------------------------
+# During dev we allow all hosts (you can restrict later)
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
-# ✅ Required for Render CSRF safety
-CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com']
+# Trusted origins for CSRF when served from onrender.com / render.com
+# Add your actual Render service URL to this env var if needed.
+CSRF_TRUSTED_ORIGINS = os.environ.get(
+    "CSRF_TRUSTED_ORIGINS", "https://*.onrender.com,https://*.render.com"
+).split(",")
 
+# -------------------------
 # Applications
+# -------------------------
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -27,21 +42,26 @@ INSTALLED_APPS = [
     "brokerapp",
 ]
 
+# -------------------------
 # Middleware
+# -------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # ✅ serves static files
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # serve static files on Render
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "brokerapp.middleware.SingleOrgMiddleware",   # simple shared-company mode
+    "brokerapp.middleware.SingleOrgMiddleware",
 ]
 
 ROOT_URLCONF = "broker_project.urls"
 
+# -------------------------
+# Templates
+# -------------------------
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -60,19 +80,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "broker_project.wsgi.application"
 
-# ✅ Database (PostgreSQL for both Local + Render)
-# ✅ Database configuration (Local + Render)
-if os.environ.get('DATABASE_URL'):
-    # Render / Production
+# -------------------------
+# Database (Render-compatible)
+# -------------------------
+# Priority: use DATABASE_URL env var on Render. For local dev, fallback to local Postgres (if present)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    # Production / Render
     DATABASES = {
-        "default": dj_database_url.config(
-            default=os.environ.get('DATABASE_URL'),
+        "default": dj_database_url.parse(
+            DATABASE_URL,
             conn_max_age=600,
             ssl_require=True
         )
     }
 else:
-    # Local PostgreSQL
+    # Local development: if you run Postgres locally keep these values,
+    # otherwise install sqlite fallback by uncommenting the sqlite block below.
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -82,12 +107,22 @@ else:
             "HOST": "localhost",
             "PORT": "5432",
             "OPTIONS": {
-                "sslmode": "disable"   # 👈 disable SSL locally
+                "sslmode": "disable"
             },
         }
     }
+    # If you want sqlite local fallback instead, comment the above and use:
+    # BASE_DIR = Path(__file__).resolve().parent.parent
+    # DATABASES = {
+    #     "default": {
+    #         "ENGINE": "django.db.backends.sqlite3",
+    #         "NAME": BASE_DIR / "db.sqlite3",
+    #     }
+    # }
 
-# Password validation
+# -------------------------
+# Password validators
+# -------------------------
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -95,25 +130,35 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# -------------------------
 # Internationalization
+# -------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
+# -------------------------
 # Static files
+# -------------------------
 STATIC_URL = "/static/"
-#STATICFILES_DIRS = [BASE_DIR / "brokerapp" / "static"]
 STATICFILES_DIRS = []
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+# -------------------------
+# Default primary key field type
+# -------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Login / Logout
-LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/dashboard/'
-LOGOUT_REDIRECT_URL = '/login/'
+# -------------------------
+# Auth / Login redirects
+# -------------------------
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
 
-# ✅ Default company name for single-org mode
+# -------------------------
+# App-specific defaults
+# -------------------------
 DEFAULT_ORG_NAME = os.environ.get("DEFAULT_ORG_NAME", "Rathi Trading Co.")
